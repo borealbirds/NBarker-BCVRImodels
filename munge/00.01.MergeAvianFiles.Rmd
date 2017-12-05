@@ -1,0 +1,260 @@
+---
+title: "00.01.MergeAvianFiles"
+author: "Nicole Barker"
+date: "Last run: Nov 30, 2017"
+output: 
+  word_document:
+    reference_docx: ../styles/ReportFormat_1.docx
+---
+
+## Background
+On Nov 30, 2017, Trish provided me with the Access Database of BAM's avian data: COFI_BC_NOV30_2017.accdb. I exported the 3 tables based on BAM's standard data format.
+
+1. BC_COFI_XY.csv
+2. BC_COFI_PKEY.txt
+3. BC_COFI_POINTCOUNT.txt
+
+In this script, I inspect the table format and ensure I can get everything in the format I need.
+
+``` {r setup, echo=F, message=F, warning=F}
+require(knitr)
+opts_knit$set(root.dir = '..')
+```
+
+``` {r load.project, message=F}
+require(ProjectTemplate)
+load.project()
+options(digits=12)
+```
+
+### Load 3 datasets
+#### 1. XY Coordinates of each survey site: *BC_COFI_XY.txt*
+``` {r load.xy}
+xy<- read.csv("data/BC_COFI_XY.csv")
+kable(head(xy), row.names=F)
+```
+
+##### Remove any SS without x and y coordinates
+``` {r remove.no.coordinates, eval=T}
+xy.qs <- xy
+xy <- xy[!is.na(xy$X),]
+xy <- xy[xy$X != 0,]
+```
+
+**Notes**
+
+* ACTION: Suggest Trish could look into datasets without coordinates. 
+
+#### 2. Sampling Occasions: *BC_COFI_PKEY.txt*
+It's useful to look at a map for this. Kathy Martin's data represents a good example. 
+
+* _PCODE_: unique code for each project
+* _SITE_: Typically a cluster of point count stations
+* _STN_: individual point count survey location
+* _SS_: compound key comprised of PCODE:SITE:STN
+* _ROUND_: If multiple visits to the same location, typically on different days.
+* _PKEY_: compound key comprised of PCODE:SITE:STN:SS:ROUND
+
+![Kathy Martin's data demonstrating different SITEs within a Project (PCODE). All red dots are from the KMART project (PCODE). Labels indicate different SITEs. Each station has its own unique ID, which was typically sampled in multiple years](../output/KathyMartinSITEdemo.jpg)
+
+``` {r load.pkey}
+pkey <- read.csv("data/BC_COFI_PKEY.txt")
+kable(head(pkey), row.names=F)
+```
+
+``` {r merge.xy.pkey, eval=T}
+xy.pkey <- merge(xy[c("PCODE", "SS", "X", "Y")], 
+               pkey[c("SS", "METHOD", "SITE", "STN", "ROUND", "YYYY", "MM", "DD", "StartTime", "obs")], by="SS", all.x=T)
+xy.pkey$DATE <- as.Date(paste(xy.pkey$YYYY, xy.pkey$MM, xy.pkey$DD, sep="/"))
+xy.pkey$PCODE.SITE <- paste(xy.pkey$PCODE, xy.pkey$SITE, sep=".")
+```
+
+##### Fix Dates
+
+* remove sites without  dates. 
+* Switch MM and DD for GMSMON15
+``` {r fix.dates, eval=T}
+xy.pkey.qs <- xy.pkey
+xy.pkey <- xy.pkey[!is.na(xy.pkey$MM),]
+unique(xy.pkey$MM)
+```
+
+Well I'm pretty sure no surveys were done in Nov and Dec, so this probably indicates a switch in MM and DD for some sites. Time to track down which ones 
+
+``` {r}
+xy.pkey$MM.old <- xy.pkey$MM
+xy.pkey$DD.old <- xy.pkey$DD
+xy.pkey$MM[xy.pkey$PCODE %in% "GMSMON15"] <- 
+xy.pkey$DD[xy.pkey$PCODE %in% "GMSMON15"] 
+
+```
+
+**Notes**
+
+* The PKEY table has `r nrow(pkey)` rows covering `r length(unique(pkey$SS))` SS from `r length(unique(pkey$SITE))` sites over `r length(unique(pkey$PCODE))` projects. 
+* The earliest point count was done in `r min(pkey$YYYY)`.
+* Sometimes the addition of WSI data added projects we already had from the Atlas. So we need to look for duplicated locations and years to remove those duplicates.
+
+##### Looking for Duplicates 1: initial exploration of duplicates by Location and Date
+
+
+xy.pkey$LocYr <- paste(xy.pkey$X, xy.pkey$Y, xy.pkey$YYYY)
+kable(head(xy.pkey), row.names=F)
+```
+
+`r length(unique(xy.pkey$LocYr))` unique location & year combinations but in a data.farme of `r nrow(xy.pkey)` rows. Indicating `r nrow(xy.pkey) -length(unique(xy.pkey$LocYr))`  duplicates. 
+
+``` {r loc.yr.duplicates, eval=T}
+loc.yr.dups <- xy.pkey$LocYr[duplicated(xy.pkey$LocYr)]
+xy.pkey.dups <- xy.pkey[xy.pkey$LocYr %in% loc.yr.dups,]
+xy.pkey.dups <- xy.pkey.dups[order(xy.pkey.dups$LocYr),]
+write.table(xy.pkey.dups, file="output/duplicates.xyYear.csv", sep=",", col.names=T, row.names=F)
+kable(xy.pkey.dups[1:20,c("LocYr", "PCODE.SITE", "STN", "StartTime", "obs")], row.names=F)
+```
+
+Thoughts on the above table: 
+
+* Some "duplicate" surveys start at different times and correspond to different STNs. This suggests that they are different stations, even though they have identical xy coordinates. Perhaps the precision on the XY coordinates isn't sufficient to distinguish separate points. 
+![Example for SS BCCA:11PQ75:310765 and BCCA:11PQ75:310765, where bird data are different, confirming two different surveys... though possibly unindicated rounds](../output/ExampleDataDuplication2.jpg)
+* Subsequent examination of a specific duplicate set (Atlas BCCA and QDFA) confirms that coordinates for some datasets have been rounded to fewer decimal places than were originally included. This would have the opposite effect of appearing to be NOT duplicated when in reality they are.
+![Example for of the exact same stations being included from two different sources (BCCA and QDFA). Survey information is identical other than XY. BCCA has lower precision on XY coordinates than does QDFA.](../output/ExampleDataDuplication3.jpg)
+
+* Short-term ACTION: Round XY coordinates to 6 digits so that I detect duplication between less and more precise datasets.
+* Short-term ACTION: Include date, start time, and observer in my calculation of duplicates
+* Longer-term ACTION: Ask Trish if Atlas has more precise coordinates stashed somewhere.
+* Longer-term ACTION: Trish can inspect apparent duplicates and delete real duplications. 
+
+##### Removing Duplicates 2: Adding Time and Observer into the calculation
+
+``` {r Loc.Date.Time.Duplicates, eval=T}
+xy.pkey$LocDateTime <- paste(round(xy.pkey$X, 6), round(xy.pkey$Y,6), xy.pkey$DATE, xy.pkey$StartTime)
+xy.pkey$LocDateTimeObs <- paste(round(xy.pkey$X, 6), round(xy.pkey$Y,6), xy.pkey$DATE, xy.pkey$StartTime, xy.pkey$obs)
+
+```
+
+**Notes** 
+
+* `r length(unique(xy.pkey$LocDateTime))` unique location, date, and time combinations but in a data.farme of `r nrow(xy.pkey)` rows. Indicating many fewer, but still `r nrow(xy.pkey)- length(unique(xy.pkey$LocDateTime))`, duplicates. 
+* `r length(unique(xy.pkey$LocDateTimeObs))` unique combinations of location, date, time, and observer, `r length(unique(xy.pkey$LocDateTimeObs))- length(unique(xy.pkey$LocDateTime))` more than just combining location, date, and time. Could these be double-observer surveys? 
+
+##### Removing Duplicates 3: Looking for double-observer surveys
+
+Look for unique locdatetime combos NOT in the locdatetimeobs table
+``` {r look.for.double.observers, eval=T}
+locdatetimedups <- xy.pkey$LocDateTime[duplicated(xy.pkey$LocDateTime)]
+locdatetimeobsdups <- xy.pkey$LocDateTimeObs[duplicated(xy.pkey$LocDateTimeObs)]
+xy.pkey.locdatetimedups <- xy.pkey[xy.pkey$LocDateTime %in% locdatetimedups,]
+xy.pkey.locdatetimeobsdups <- xy.pkey[xy.pkey$LocDateTimeObs %in% locdatetimeobsdups,]
+
+possible.double.observers <- xy.pkey.locdatetimedups[!xy.pkey.locdatetimedups$LocDateTime %in% xy.pkey.locdatetimeobsdups$LocDateTime, c("PCODE.SITE", "STN", "ROUND", "DATE", "StartTime", "obs", "LocDateTimeObs")]
+possible.double.observers <- possible.double.observers[order(possible.double.observers$LocDateTimeObs),]
+write.table(possible.double.observers, file="output/duplicates.possibledoubleobservers.csv", sep=",", col.names=T, row.names=F)
+kable(possible.double.observers[1:50, c("PCODE.SITE", "STN", "ROUND", "DATE", "StartTime", "obs")])
+```
+
+**Notes*
+After inspecting this table in Excel and in Access, I came to the following conclusions: 
+
+* Only one survey appears to be true double-observer surveys: KMART:RISKESD has observers LMT and KD, who observed similar but not identical bird lists. ACTION: Keep these ones. 
+  
+* Some appear to be duplicated datasets... giving the impression of two different observers because they're numbers in BCCA but names in the original project. e.g., 
+    * BCCA10FG08 and BL2TFL48 in 2008. Atlas observer 970 is probably Kelly Squire. 
+    * BCCA and QDFA in 2008 and 2009. 
+        * Atlas observer 82 = Chris Chutter; 
+        * Observer 1263 = Christine Rothenbach; 
+        * Observer 467 = James Bradley; 
+        * Observer 1367 = Kate England. 
+    * ACTION: Delete the ATLAS versions of these but keep the project specific ones. 
+
+* And still others are inexplicably weird. Pairs of apparently different observers conducting a survey at the same location and time, but with very different species lists. 
+    * BCCA:10DU79 and BCCA:10DU89 appear to have two observers: one unidentified and one 99 or 100. Inspecting the Access Database suggests that this is NOT double-observer (see below screencap). I wonder if somehow the same observer collected all the data at this station, but didn't fill in all the rows with the observer ID. This led to splitting the survey into two parts? ACTION: DELETE these sites
+![Example BCCA:10DU79 and BCCA:10DU89 on Jun 5, 2009 and Jun 17, 2009](../output/ExampleDataDuplication4.jpg)
+
+  * BCCA:10FE54 has observers 120 and 965. Similar situation as above where observer  120 has a much bigger species list than does observer 965. ACTION: Delete observer 965 but keep 120. 
+![Example BCCA:10FE54](../output/ExampleDataDuplication5.jpg)
+
+**ACTIONS**
+
+* I created an Excel file summarizing the verdict on this specific subset of duplicates: duplicates.possibledoubleobservers-deleteVerdict.csv. Use this to remove undesired sites/surveys. 
+
+``` {r remove.unwanted.set1, eval=T}
+removeverdict <- read.csv("output/duplicates.possibledoubleobservers-deleteVerdict.csv", header=T)
+LocDateTimeObs.todelete <- unique(removeverdict$LocDateTimeObs)
+xy.pkey.qs <- xy.pkey
+xy.pkey <- xy.pkey[!xy.pkey$LocDateTimeObs %in% LocDateTimeObs.todelete,]
+```
+
+##### Removing Duplicates 4: Moving back to regular duplicates (LocationDateTimeObserver)
+
+Now that I've taken care of surveys that _appeared_ to be double-observer (b/c different observers for all other identical survey info), I can focus on examining the duplicates for Location, Date, Time, and Observer. 
+
+``` {r}
+rbind(head(xy.pkey.locdatetimeobsdups[c("PCODE.SITE", "STN", "ROUND", "DATE", "StartTime", "obs")], 10), tail(xy.pkey.locdatetimeobsdups[c("PCODE.SITE", "STN", "ROUND", "DATE", "StartTime", "obs")], 10))
+
+```
+
+* These duplicates have different STN names but they start at the same time and are surveyed by the same observer. I suggest there are errors somewhere, but I can't figure out where.
+* Closer inspection in the Access table suggests that the data for these locations are duplicated as well, despite having different STN names. 
+![Example for SS BCCA:11NS17:333027 and BCCA:11NS17:333029, suggesting complete duplication of data](../output/ExampleDataDuplication1.jpg)
+* Short-term ACTION: Delete one set of these duplicates. 
+* Long-term ACTION: Take this list to Trish for more exploration. 
+
+
+
+
+
+
+#### 3. Point Count Data (i.e., bird observations): *BC_COFI_POINTCOUNT.txt* 
+
+
+``` {r load.pcdat, eval=F}
+#load point count data
+pcdat1 <- read.csv("data/BC_COFI_POINTCOUNT.txt")
+colnames(pcdat1)[which(colnames(pcdat1)=="SumOfABUND")] <- "ABUND"
+pcdat1 <- pcdat1[c("PKEY", "DURATION", "DISTANCE", "SPECIES", "BEH", "ABUND")]
+
+# load species codes/names
+codes <- read.csv("data/EC_AVIAN_CORE_20131015.csv")
+colnames(codes)[which(colnames(codes)=="Species_ID")] <- "SPECIES"
+
+#merge species names into point count dataset
+pcdat2 <- merge(pcdat1, codes, by="SPECIES", all.x=T)
+
+#subset for necessary columns
+pcdat <- pcdat2[c(colnames(pcdat1), "English_Name")]
+kable(head(pcdat), row.names=F)
+```
+
+
+
+##### Looking for duplicates in the point count dataset
+
+``` {r detect.duplicates, eval=F}
+
+
+```
+
+**Notes**
+* There are no non-occurrences in the database. i.e., if a species wasn't observed during a given survey, it isn't recorded in the database. This is demonstrated by running `nrow(pcdat[pcdat$ABUND %in% 0,])`.
+
+
+
+#### adding the zeroes
+
+``` {r, eval=F}
+pcdat_melt <- melt(pcdat[c("PKEY", "SPECIES", "DURATION", "DISTANCE", "ABUND", "BEH")], measure.vars="ABUND")
+
+# test (delete after determining it works)
+pcdat_melt_tmp <- pcdat_melt[pcdat_melt$SPECIES %in% c("WBNU", "WCSP", "WETA"),]
+pcdat_wide_tmp <- cast(pcdat_melt_tmp, PKEY + DURATION + DISTANCE + BEH ~ SPECIES, value="ABUND")
+
+# why does it require aggregating? LOOK FOR DUPLICATES
+# unique ID for PKEY,duration,distance
+
+pcdat_melt$unique.comb <- paste(pcdat_melt$PKEY, pcdat_melt$DURATION, pcdat_melt$DISTANCE, pcdat_melt$SPECIES, pcdat_melt$BEH)
+dup.combos <- pcdat_melt[duplicated(pcdat_melt$unique.comb),]$unique.comb
+dups <- pcdat_melt[pcdat_melt$unique.comb %in% dup.combos,]
+dups <- dups[order(dups$unique.comb),]
+write.table(dups, "output/BC_COFI_PCDAT_DUPLICATES.csv", sep=",", row.names=F, col.names=T)
+
+```

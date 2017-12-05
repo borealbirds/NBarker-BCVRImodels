@@ -1,0 +1,149 @@
+---
+title: "Standardizing (Tree) Species Group Codes from various Ranking Matrix Datasets"
+author: "Nicole Barker"
+date: "Last run: November 28, 2017"
+output: 
+  word_document:
+    reference_docx: ../styles/ReportFormat_1.docx
+---
+
+The script standardizes the various data files so they have the same standard set of tree species codes. 
+
+``` {r setup, echo=F, message=F, warning=F}
+require(knitr)
+opts_knit$set(root.dir = '..')
+```
+
+# Pre-Processing Data Files 
+
+``` {r load.species.code.lookup}
+lookup.spcd <- read.csv("data/COFI.Layer.TableExport/LOOKUP.TreeSpeciesCodes.csv")
+lookup.spcd <- lookup.spcd[c("code_use", "code_orig", "file")]
+lookup.spcd <- lookup.spcd[-which(lookup.spcd$file == ""),]
+```
+
+## File 1. area_summary_with_matrix.xlsx -- AREA
+
+This file is used to supply forest area to my representation analyses. 
+UPDATE Feb 15: No longer using this file, since these values are incorrect. So I don't run this code.  
+
+``` {r eval=F}
+area_sum <- read.csv("data/COFI.Layer.TableExport/area_summary_with_matrix.csv")
+colnames(area_sum)[which(colnames(area_sum) == "X")] <- "code_orig"
+area_sum.c <- merge(area_sum, lookup.spcd[lookup.spcd$file=="area_summary_with_matrix",], by="code_orig", all=T)
+area_sum.c2 <- area_sum.c[c(1,(ncol(area_sum.c)-1), 2:(ncol(area_sum.c)-2))]
+colnames(area_sum.c2)[which(colnames(area_sum.c2) %in% lookup.ageht$age_ht_orig)] <- as.character(lookup.ageht$age_ht_new)
+
+write.table(area_sum.c2, file="data/COFI.Layer.TableExport/area_summary_with_matrix-zSpGroup.csv", row.names=F, col.names=T, sep=",")
+```
+
+## File 2. area_summary_with_matrix.xlsx -- RANK
+
+I'm using forest stand ranks from this file, wherever I use them. 
+UPDATE Mar 15: No longer using this file, since these values are incorrect. So I don't run this code.  
+
+``` {r eval=F}
+rank_sum <- read.csv("data/COFI.Layer.TableExport/area_summary_with_matrix-RANK.csv")
+colnames(rank_sum)[which(colnames(rank_sum) == "SP_Group")] <- "code_orig"
+rank_sum.c <- merge(rank_sum, lookup.spcd[lookup.spcd$file=="area_summary_with_matrix",], by="code_orig", all=T)
+rank_sum.c2 <- rank_sum.c[c(1,(ncol(rank_sum.c)-1), 2:(ncol(rank_sum.c)-2))]
+colnames(rank_sum.c2)[which(colnames(rank_sum.c2) %in% lookup.ageht$age_ht_orig)] <- as.character(lookup.ageht$age_ht_new)
+colnames(rank_sum.c2)[which(colnames(rank_sum.c2)=="ï..BEC")] <- "BEC"
+
+write.table(rank_sum.c2, file="data/COFI.Layer.TableExport/area_summary_with_matrix-RANK-zSpGroup.csv", row.names=F, col.names=T, sep=",")
+```
+
+## Files 3, 4, and 5. FORID_BAMv4_Nov29.csv; BAMv4_identMigLayernew.csv; BBSv3_identMigBirdnew;
+
+These are intersections of BAM point count data with the first Forsite file. They are superceded by a more recent file, so I don't run this code
+
+``` {r , eval=F}
+intxn <- read.csv("data/Intersections/FORID_BAMv4_Nov29.csv")
+colnames(intxn)[which(colnames(intxn) == "SpeciesGroup")] <- "code_orig"
+intxn.c <- merge(intxn, lookup.spcd[lookup.spcd$file=="FORID_BAMv4_Nov29",], by="code_orig", all=T)
+intxn.c2 <- intxn.c[c(2:(ncol(intxn.c)-2), 1,(ncol(intxn.c)-1), ncol(intxn.c))]
+
+write.table(intxn.c2, file="data/Intersections/FORID_BAMv4_Nov29-zSpGroup.csv", row.names=F, col.names=T, sep=",")
+
+rm(intxn, intxn.c, intxn.c2, intxn.c3)
+```
+
+``` {r eval=F}
+intxn <- read.csv("data/Intersections/BAMv4_identMigLayernew.csv")
+colnames(intxn)[which(colnames(intxn) == "SpeciesGroup")] <- "code_orig"
+intxn.c <- merge(intxn, lookup.spcd[lookup.spcd$file=="FORID_BAMv4_Nov29",], by="code_orig", all=T)
+intxn.c2 <- intxn.c[c(2:(ncol(intxn.c)-2), 1,(ncol(intxn.c)-1), ncol(intxn.c))]
+
+write.table(intxn.c2, file="data/Intersections/BAMv4_identMigLayernew-zSpGroup.csv", row.names=F, col.names=T, sep=",")
+
+rm(intxn, intxn.c, intxn.c2)
+```
+
+``` {r eval=F}
+intxn <- read.csv("data/Intersections/BBSv3_identMigBirdnew.csv")
+colnames(intxn)[which(colnames(intxn) == "SpeciesGroup")] <- "code_orig"
+intxn.c <- merge(intxn, lookup.spcd[lookup.spcd$file=="FORID_BAMv4_Nov29",], by="code_orig", all=T)
+intxn.c2 <- intxn.c[c(2:(ncol(intxn.c)-2), 1,(ncol(intxn.c)-1), ncol(intxn.c))]
+
+write.table(intxn.c2, file="data/Intersections/BBSv3_identMigBirdnew-zSpGroup.csv", row.names=F, col.names=T, sep=",")
+
+rm(intxn, intxn.c, intxn.c2)
+```
+
+## File 6. BBS_BAM_Atlas_MigLayer_Jan22_2017
+
+As of March 23, 2017, this is the most recent intersection of BAM point count data with the Forsite VRI-based shapefile. 
+
+``` {r eval=T}
+intxn <- read.csv("data/Intersections/BBS_BAM_Atlas_MigLayer_Jan22_2017.csv")
+colnames(intxn)[which(colnames(intxn) == "SpeciesGroup")] <- "code_orig"
+intxn.c <- merge(intxn, lookup.spcd[lookup.spcd$file=="BBS_BAM_Atlas_MigLayer_Jan22_2017",], by="code_orig", all=T)
+intxn.c2 <- intxn.c[c(2:(ncol(intxn.c)-2), 1,(ncol(intxn.c)-1), ncol(intxn.c))]
+
+
+write.table(intxn.c2, file="data/Intersections/BBS_BAM_Atlas_MigLayer_Jan22_2017-zSpGroup.csv", row.names=F, col.names=T, sep=",")
+
+rm(intxn, intxn.c, intxn.c2)
+```
+
+## File 7. mig_birds_Layer_polyarea_forstandatts.RData
+
+Export of the Jan 2017 Forsite file. With a field I added calculating area (in ha) of each polygon.
+
+``` {r }
+load("cache/mig_birds_Layer_polyarea_forstandatts.RData")
+vri <- mig_birds_Layer_polyarea_forstandatts
+colnames(vri)[which(colnames(vri)=="SpeciesGroup")] <- "code_orig"
+vri <- merge(vri, lookup.spcd[lookup.spcd$file=="mig_birds_Layer_polyarea_forstandatts",], by="code_orig", all=T)
+vri2 <- vri[c(2:(ncol(vri)-2), 1,(ncol(vri)-1), ncol(vri))]
+
+write.table(vri2, file="data/COFI.Layer.TableExport/mig_birds_Layer_polyarea_forstandatts-zSpGroup.csv", row.names=F, col.names=T, sep=",")
+```
+
+
+## File 8. Migratory_bird_ranking_matrix_V1.3_Apr15_2016 FINAL-dataformat.csv
+
+The actual real matrix file, formatted so that it can be read as a csv. 
+
+``` {r }
+cmat <- read.csv("data/COFI.Layer.TableExport/Migratory_bird_ranking_matrix_V1.3_Apr15_2016 FINAL-dataformat.csv", header=T)
+colnames(cmat)[which(colnames(cmat)=="SP_Group")] <- "code_orig"
+cmat <- merge(cmat, lookup.spcd[lookup.spcd$file=="Migratory_bird_ranking_matrix_V1.3_Apr15_2016",], by="code_orig", all=T)
+cmat2 <- cmat[c(2:(ncol(cmat)-2), 1,(ncol(cmat)-1), ncol(cmat))]
+
+write.table(cmat2, file="data/COFI.Layer.TableExport/Migratory_bird_ranking_matrix_V1.3_Apr15_2016 FINAL-dataformat-zSpGroup.csv", row.names=F, col.names=T, sep=",")
+```
+
+## File 9. BARB_VRI_BAM_ForID.csv
+
+Export of the Mar 2017 shapefile that Barb produced for me.
+
+
+``` {r }
+load("cache/barbvri.RData")
+colnames(barbvri)[which(colnames(barbvri)=="SpeciesGroup_Orig")] <- "code_orig"
+barbvri <- merge(barbvri, lookup.spcd[lookup.spcd$file=="mig_birds_Layer_polyarea_forstandatts",], by="code_orig", all=T)
+barbvri2 <- barbvri[c(2:(ncol(barbvri)-2), 1,(ncol(barbvri)-1), ncol(barbvri))]
+
+write.table(barbvri2, file="data/COFI.Layer.TableExport/barbvri-zSpGroup.csv", row.names=F, col.names=T, sep=",")
+```
