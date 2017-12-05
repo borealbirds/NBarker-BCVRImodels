@@ -51,19 +51,22 @@ Temporary Items
 *.Rhistory
 .Rhistory
 .Rproj.user*
+*.Rproj
 .Rproj.user
 .Ruserdata
 .Rapp.history
 *.doc*
 *.pdf
 
-## Data Folders
+## Data Files
 *.xlsx
 .xls
 *.csv
 .csv
 *.txt
 .txt
+*.mxd
+.mxd
 
 
 ## Folders with Data
