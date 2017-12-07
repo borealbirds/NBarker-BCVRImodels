@@ -59,5 +59,5 @@ Nicole turned off many of the automatic loading because of large file sizes and 
 3. Then run the remaining code by line or by chunk, as per your preference. Again, refer to the munge and src readmes for more details. 
 
 
-## What is ProjectTemplate?
+### What is ProjectTemplate?
 For more about the ProjectTemplate package, see http://projecttemplate.net
