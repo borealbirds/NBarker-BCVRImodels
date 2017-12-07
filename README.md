@@ -29,20 +29,22 @@ To repeat the work, follow this overall workflow:
 1. In RStudio, load the project: MB.Matrix-Nov2017data.Rproj will be saved in the NBarker.BCVRImodels directory. 
 2. Ensure you have the ProjectTemplate package installed on your computer. 
 3. Run scripts from directories in the following order:
-	MUNGE: Pre-process data using munge scripts	
-	SRC: Run analysis scripts saved in the src folder 
+	  * MUNGE: Pre-process data using munge scripts	
+	  * SRC: Run analysis scripts saved in the src folder 
 
 There are readme files within the munge and src folders with more specific details but the generally applicable steps are: 
 
 1. The first two chunks in any RMd file will be setup chunks. Chunk 1 has:
 
-	require(knitr) # loads knitr package
-	opts_knit$set(root.dir = '..') #sets reference directory one level up from where the current file is (don't worry about this too much; but it is important for re-running scripts)
+	`require(knitr) # loads knitr package`
+	
+	`opts_knit$set(root.dir = '..') #sets reference directory one level up from where the current file is (don't worry about this too much; but it is important for re-running scripts)`
 
 2. Chunk 2 is:
 
-	library('ProjectTemplate')
-	load.project()
+    `require('ProjectTemplate') #absolutely essential!`
+
+    `load.project() #essential!`
 
 The second line of code prompts some automated processing set up by Nicole for this project, and you'll see several messages. Depending on the project configuration, this may include: 
 

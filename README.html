@@ -125,27 +125,53 @@ $(document).ready(function () {
 <p>BAM (rep: Nicole Barker, supervised by Erin Bayne) was recruited to collaborate on a project with BC forest products companies (reps: Kari Stuart-Smith of Canfor and Laura Trout of West Fraser), and CWS (rep: Mark Drever).</p>
 <p>The primary goal was to evaluate a Stand Ranking Matrix created by the BC forest products companies. Read more about the matrix in the folder: “…InfoBird Toolkit &amp; Stand Ranking Matrix”</p>
 <p>The secondary goal was to create an alternative to the Stand Ranking Matrix, by creating maps of predicted total bird density at the scale of Vegetation Resource Inventory (VRI) polygons.</p>
-<p>Nicole used ProjectTemplate to manage her project files and workflow. If used appropriately, ProjectTemplate can help ensure reproducibility.</p>
-<p>To repeat the work, follow this overall workflow:</p>
-<p><code>setwd()</code> into the directory where this README file is located. This may be done automatically if you load the MB.Matrix - May 2017 data.Rproj project into RStudio.</p>
-<p>Then you need to run the following two lines of R code:</p>
-<pre><code>library('ProjectTemplate')
-load.project()</code></pre>
-<p>After you enter the second line of code, you’ll see a series of automated messages as ProjectTemplate goes about doing its work. This work involves:</p>
-<ul>
-<li>Reading in the global configuration file contained in <code>config</code>.</li>
-<li>Loading any R packages you listed in he configuration file.*</li>
-<li>Reading in any datasets stored in <code>data</code> or <code>cache</code>. *</li>
-<li><p>Preprocessing your data using the files in the <code>munge</code> directory.*</p></li>
-<li><p>IF the config settings enable automatic loading of packages, data, and saved (cached) files, and if munging is set to run. Nicole may have turned these options off due to large file sizes and lengthy pre-processing.</p></li>
-</ul>
-<p>To fully replicate the analyses, you’ll need to do the following things manually.</p>
+<div id="why-are-you-looking-at-these-files" class="section level2">
+<h2>Why are you looking at these files?</h2>
+<p>If you’re part of the BAM team, maybe Nicole suggested these files could teach you about working with the BAM dataset. Or maybe you’re running similar analyses in a different region. Either way, here’s what you need to know:</p>
+<p>Nicole used ProjectTemplate to manage her project files and workflow. If used appropriately, ProjectTemplate can help ensure reproducibility. But it requires a few quirks.</p>
 <ol style="list-style-type: decimal">
+<li>You’ll need ALL the files (e.g., data), so request access to the Dropbox folder. <strong>Copy the folder to your own unshared Dropbox folder so your changes don’t affect Nicole’s files.</strong></li>
+<li>You’ll want to use RMarkdown via RStudio</li>
+</ol>
+</div>
+<div id="reproducing-these-analyses" class="section level2">
+<h2>Reproducing these Analyses</h2>
+<p>To repeat the work, follow this overall workflow:</p>
+<ol style="list-style-type: decimal">
+<li>In RStudio, load the project: MB.Matrix-Nov2017data.Rproj will be saved in the NBarker.BCVRImodels directory.</li>
+<li>Ensure you have the ProjectTemplate package installed on your computer.</li>
+<li>Run scripts from directories in the following order:
+<ul>
 <li>MUNGE: Pre-process data using munge scripts</li>
 <li>SRC: Run analysis scripts saved in the src folder</li>
+</ul></li>
 </ol>
-<p>Each munge and analysis script should load all necessary data and RData files.</p>
-<p>For more details about ProjectTemplate, see <a href="http://projecttemplate.net" class="uri">http://projecttemplate.net</a></p>
+<p>There are readme files within the munge and src folders with more specific details but the generally applicable steps are:</p>
+<ol style="list-style-type: decimal">
+<li><p>The first two chunks in any RMd file will be setup chunks. Chunk 1 has:</p>
+<p><code>require(knitr) # loads knitr package</code></p>
+<p><code>opts_knit$set(root.dir = '..') #sets reference directory one level up from where the current file is (don't worry about this too much; but it is important for re-running scripts)</code></p></li>
+<li><p>Chunk 2 is:</p>
+<p><code>require('ProjectTemplate') #absolutely essential!</code></p>
+<p><code>load.project() #essential!</code></p></li>
+</ol>
+<p>The second line of code prompts some automated processing set up by Nicole for this project, and you’ll see several messages. Depending on the project configuration, this may include:</p>
+<ul>
+<li>Reading in the global configuration file contained in <code>config</code>.</li>
+<li>Loading any R scripts in the <code>lib</code> directory</li>
+<li>Loading any R packages listed in the configuration file. (load_libraries set to TRUE)</li>
+<li>Reading in any datasets stored in <code>data</code> or <code>cache</code>. (if data_loading and cache_loading set to TRUE)</li>
+<li>Preprocessing data using the files in the <code>munge</code> directory. (if munging set to TRUE)</li>
+</ul>
+<p>Nicole turned off many of the automatic loading because of large file sizes and lengthy pre-processing.</p>
+<ol start="3" style="list-style-type: decimal">
+<li>Then run the remaining code by line or by chunk, as per your preference. Again, refer to the munge and src readmes for more details.</li>
+</ol>
+</div>
+<div id="what-is-projecttemplate" class="section level2">
+<h2>What is ProjectTemplate?</h2>
+<p>For more about the ProjectTemplate package, see <a href="http://projecttemplate.net" class="uri">http://projecttemplate.net</a></p>
+</div>
 </div>
 
 
