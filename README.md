@@ -20,7 +20,7 @@ If you're part of the BAM team, maybe Nicole suggested these files could teach y
 
 Nicole used ProjectTemplate to manage her project files and workflow. If used appropriately, ProjectTemplate can help ensure reproducibility. But it requires a few quirks. 
 
-1. You'll need ALL the files (e.g., data), so request access to the Dropbox folder. **Copy the folder to your own unshared Dropbox folder so your changes don't affect Nicole's files.** 
+1. You'll need ALL the files (e.g., data), so request access to the Dropbox folder. **Copy the folder to a folder on your computer (local, Dropbox, whatever) so your changes don't affect Nicole's files except through GitHub.** 
 2. You'll want to use RMarkdown via RStudio
 
 ## Reproducing these Analyses
