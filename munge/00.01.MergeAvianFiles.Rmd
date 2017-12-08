@@ -281,13 +281,13 @@ kable(rbind(head(pcdat), tail(pcdat)), row.names=F, caption="First 6 and last 6 
 ##### Looking for duplicated bird observations
 
 
-``` {r, eval=T}
+``` {r melt.pc.dat, eval=T}
 pcdat_melt <- melt(pcdat[c("PKEY", "SPECIES", "DURATION", "DISTANCE", "ABUND", "BEH")], measure.vars="ABUND") # bring dataset into molten form
 ```
 
 Let's look for duplicates here... Combine PKEY, Species, Duration, Distance, and Behaviour to create a unique ID.
  
-``` {r}
+``` {r look.for.duplicates}
 pcdat_melt$PkeySpDurDisBeh <- paste(pcdat_melt$PKEY, pcdat_melt$SPECIES, pcdat_melt$DURATION, pcdat_melt$DISTANCE, pcdat_melt$BEH, sep=".")
 ```
 
@@ -325,25 +325,55 @@ First thing to check... whether species means differ by survey method.
 
 **FILES**
 
-1. **BC_COFI_XY.csvNational_Proj_Summary_V4_2015.csv**
+1. **National_Proj_Summary_V4_2015.csv**
 
-```{r}
+```{r, load.proj.summary}
+projs <- read.csv("data/National_Proj_Summary_V4_2015.csv", header=T)
+colnames(projs)[which(colnames(projs) == "Method")] <- "METHOD" #change colname
+projs.qs <- projs #quicksave
+projs <- projs[projs$PCODE %in% pkey$PCODE,] #projects I care about for now
+projs <- projs[order(projs$PCODE),] #sort by pcode
 
+kable(projs[c("PCODE", "METHOD", "DURMETH", "DISTMETH", "ChangeMethod", "MaxDuration", "Maxdist", "Bands.")], row.names=F)
 ```
 
-``` {r, eval=F}
+Next, merge pkey table with point count data. 
+
+``` {r merge.xy.pkey.pc, eval=T}
 xy.pkey.pc <- merge(xy.pkey[c("SS", "METHOD", "ROUND", "PKEY", "YYYY", "MM", "DD", "StartTime", "obs")], pcdat, by="PKEY")
+```
+
+Next, merge pkey/point count data with project summary to associate each point count survey with a method. 
+
+``` {r merge.xy.pkey.pc.method, eval=T}
+xy.pkey.pc.meth <- merge(xy.pkey.pc, projs[c("PCODE", "METHOD", "DURMETH", "DISTMETH", "ChangeMethod", "MaxDuration", "Maxdist", "Bands.")], by="METHOD")
+```
+
+Create unique ID for combination of duration and distance method
+
+``` {r}
+xy.pkey.pc.meth$DurDisCombo <- paste(xy.pkey.pc.meth$DURMETH, xy.pkey.pc.meth$DISTMETH, sep=".")
+
+```
+
+**Compare bird counts among different survey types**
+
+`r length(unique(xy.pkey.pc.meth$DurDisCombo))` different combinations of methods used, across `r length(unique(xy.pkey.pc.meth$PCODE))` different projects.
+
+Aggregate to "total bird" count per survey instance
+
+``` {r aggregate, eval=T}
+pc.tmp <- ddply()
+```
 
 
-projsum <- read.csv("")
+``` {r compare.bird.means.by.method, eval=T}
 
 
-xy.pkey.pc.meth <- merge(xy.pkey.pc, )
 
 ```
 
 
-* We only want to keep observations that were 
 
 
 
