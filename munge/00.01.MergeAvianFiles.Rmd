@@ -10,9 +10,11 @@ output:
 ## Background
 On Nov 30, 2017, Trish provided me with the Access Database of BAM's avian data: COFI_BC_NOV30_2017.accdb. I exported the 3 tables based on BAM's standard data format.
 
-1. BC_COFI_XY.csv
-2. BC_COFI_PKEY.txt
-3. BC_COFI_POINTCOUNT.txt
+**FILES**
+
+1. **BC_COFI_XY.csv**
+2. **BC_COFI_PKEY.txt**
+3. **BC_COFI_POINTCOUNT.txt**
 
 In this script, I inspect the table format and ensure I can get everything in the format I need.
 
@@ -53,9 +55,11 @@ It's useful to look at a map for this. Kathy Martin's data represents a good exa
 * _STN_: individual point count survey location
 * _SS_: compound key comprised of PCODE:SITE:STN
 * _ROUND_: If multiple visits to the same location, typically on different days.
-* _PKEY_: compound key comprised of PCODE:SITE:STN:SS:ROUND
+* _PKEY_: compound key -->  PCODE:SITE:STN:YY:ROUND
+* _METHOD_: The survey method (survey distance, duration); usually but not always consistent within a PCODE.
+* _obs_: Identity of the survey observer.
 
-![ ^^^Kathy Martin's data demonstrating different SITEs within a Project (PCODE). All red dots are from the KMART project (PCODE). Labels indicate different SITEs. Each station has its own unique ID, which was typically sampled in multiple years](../output/KathyMartinSITEdemo.jpg)
+![ ^^^ Image. BBS, Atlas (BCCA), and KMART (Kathy Martin)'s data, as an example of PCODE, SITE, and STN. Different coloured dots are from different projects (PCODEs). Kathy Martin's data (KMART) has clusters of stations in different sites (SITE), which are labelled KNIFEAFF, KNIFE7M, etc. Within (SITE) clusters are individual stations (STN). The combination of PCODE:SITE:STN makes up SS, which is a  unique ID corresponding to a given location indicated by xy coordinates](../output/KathyMartinSITEdemo.jpg)
 
 ``` {r load.pkey}
 pkey <- read.csv("data/BC_COFI_PKEY.txt")
@@ -131,13 +135,13 @@ Thoughts on the above table:
 
 * Some "duplicate" surveys start at different times and correspond to different STNs. This suggests that they are different stations, even though they have "identical" xy coordinates. Perhaps the precision on the XY coordinates isn't sufficient to distinguish separate points. 
 
-![ ^^^Example for SS BCCA:11PQ75:310765 and BCCA:11PQ75:310765, where bird data are different, confirming two different surveys... though possibly unindicated rounds](../output/ExampleDataDuplication2.jpg)
+![ ^^^ Image. Example for SS BCCA:11PQ75:310765 and BCCA:11PQ75:310765, where bird data are different, confirming two different surveys... though possibly unindicated rounds](../output/ExampleDataDuplication2.jpg)
 
 * Subsequent examination of a specific known duplicate set (Atlas BCCA and QDFA) confirms that coordinates for some datasets have been rounded to fewer decimal places than were originally included. This would have the opposite effect of appearing to be NOT duplicated when in reality they are.
     * Short-term ACTION: Round XY coordinates to 6 digits so that I detect duplication between less and more precise datasets.
     * Longer-term ACTION: Ask Trish if Atlas has more precise coordinates stashed somewhere.
 
-![ ^^^Example for of the exact same stations being included from two different sources (BCCA and QDFA). Survey information is identical other than XY. BCCA has lower precision on XY coordinates than does QDFA.](../output/ExampleDataDuplication3.jpg)
+![ ^^^ Image. Example for of the exact same stations being included from two different sources (BCCA and QDFA). Survey information is identical other than XY. BCCA has lower precision on XY coordinates than does QDFA.](../output/ExampleDataDuplication3.jpg)
 
 * In conclusion, the current LocYr combination is not a sufficient indicator for identifying duplicates
     * Short-term ACTION: Include date, start time, and observer in my calculation of duplicates
@@ -191,15 +195,15 @@ It's a small set, so I inspected them all manually in Excel and in Access. I cam
 * And still others are inexplicably weird. Pairs of apparently different observers conducting a survey at the same location and time, but with very different species lists. 
     * BCCA:10DU79 and BCCA:10DU89 appear to have two observers: one unidentified and one 99 or 100. Inspecting the Access Database suggests that this is NOT double-observer (see below screencap). I wonder if somehow the same observer collected all the data at this station, but didn't fill in all the rows with the observer ID. This led to splitting the survey into two parts? ACTION: DELETE these sites
 
-![ ^^^Example BCCA:10DU79 and BCCA:10DU89 on Jun 5, 2009 and Jun 17, 2009](../output/ExampleDataDuplication4.jpg)
+![ ^^^ Image. Example BCCA:10DU79 and BCCA:10DU89 on Jun 5, 2009 and Jun 17, 2009](../output/ExampleDataDuplication4.jpg)
 
   * BCCA:10FE54 has observers 120 and 965. Similar situation as above where observer  120 has a much bigger species list than does observer 965. ACTION: Delete observer 965 but keep 120. 
 
-![ ^^^Example BCCA:10FE54](../output/ExampleDataDuplication5.jpg)
+![ ^^^ Image. Example BCCA:10FE54](../output/ExampleDataDuplication5.jpg)
 
 **ACTIONS**
 
-* I created an Excel file summarizing the verdict on this specific subset of duplicates: duplicates.possibledoubleobservers-deleteVerdict.csv. Use this to remove undesired sites/surveys. 
+* I created an Excel file summarizing the verdict on this specific subset of duplicates: ** duplicates.possibledoubleobservers-deleteVerdict.csv.** Use this to remove undesired sites/surveys. 
 
 ``` {r remove.unwanted.set1, eval=T}
 removeverdict <- read.csv("output/duplicates.possibledoubleobservers-deleteVerdict.csv", header=T)
@@ -228,13 +232,13 @@ Investigating on a case by case basis.
 * KMART:KNIFEKN: B2: looks like it might be a typo extra space in the SS/STN. Results in different bird data, but I think maybe it's supposed to be for the same site. ACTION: I changed the SS and STN name in the hopes that it would fix the problem, but it probably won't. I may need to remove this STN from the dataset. 
 * BCCA: In some of the pairs I checked, the surveys are at the same location, started at the same time, and done by the same observer. They have similar but not identical bird list.
 
-![ ^^^Example BCCA:08MM11 at 6:37 am by observer 117. Entry 1 has FOSP while Entry 2 doesn't; Entry 2 has SAVS and WCSP while Entry 1 doesn't](../output/ExampleDataDuplication6.jpg)
+![ ^^^ Image. Example BCCA:08MM11 at 6:37 am by observer 117. Entry 1 has FOSP while Entry 2 doesn't; Entry 2 has SAVS and WCSP while Entry 1 doesn't](../output/ExampleDataDuplication6.jpg)
 
 * But in other pairs, everything is identical (location, date, time, observer, AND bird list). I suggest there are errors somewhere, but I can't figure out where.
 
-![ ^^^Example for SS BCCA:11NS17:333027 and BCCA:11NS17:333029, suggesting complete duplication of data](../output/ExampleDataDuplication1.jpg)
+![ ^^^ Image. Example for SS BCCA:11NS17:333027 and BCCA:11NS17:333029, suggesting complete duplication of data](../output/ExampleDataDuplication1.jpg)
 
-![ ^^^Example for BCCA:10CE80, suggesting complete duplication of data](../output/ExampleDataDuplication7.jpg)
+![ ^^^ Image. Example for BCCA:10CE80, suggesting complete duplication of data](../output/ExampleDataDuplication7.jpg)
 
 * Short-term ACTION: Delete these from the dataset in the interest of saving time. 
 * Long-term ACTION: Take this list to Trish for more exploration. 
@@ -250,7 +254,11 @@ After that, I hope there aren't any duplicates left.
 
 #### 3. Point Count Data (i.e., bird observations): *BC_COFI_POINTCOUNT.txt* 
 
-``` {r load.pcdat, eval=F}
+**FILES**
+
+1. **EC_AVIAN_CORE_20150324.csv**
+
+``` {r load.pcdat, eval=T}
 #load point count data
 pcdat1 <- read.csv("data/BC_COFI_POINTCOUNT.txt")
 colnames(pcdat1)[which(colnames(pcdat1)=="SumOfABUND")] <- "ABUND"
@@ -258,6 +266,7 @@ pcdat1 <- pcdat1[c("PKEY", "DURATION", "DISTANCE", "SPECIES", "BEH", "ABUND")]
 
 # load species codes/names
 #codes <- read.csv("data/EC_AVIAN_CORE_20131015.csv") # OLDER species list
+codes <- read.csv("data/EC_AVIAN_CORE_20150324.csv")
 colnames(codes)[which(colnames(codes)=="Species_ID")] <- "SPECIES"
 
 #merge species names into point count dataset
@@ -269,6 +278,77 @@ pcdat <- pcdat[order(pcdat$PKEY),]
 kable(rbind(head(pcdat), tail(pcdat)), row.names=F, caption="First 6 and last 6 rows")
 ```
 
+##### Looking for duplicated bird observations
+
+
+``` {r, eval=T}
+pcdat_melt <- melt(pcdat[c("PKEY", "SPECIES", "DURATION", "DISTANCE", "ABUND", "BEH")], measure.vars="ABUND") # bring dataset into molten form
+```
+
+Let's look for duplicates here... Combine PKEY, Species, Duration, Distance, and Behaviour to create a unique ID.
+ 
+``` {r}
+pcdat_melt$PkeySpDurDisBeh <- paste(pcdat_melt$PKEY, pcdat_melt$SPECIES, pcdat_melt$DURATION, pcdat_melt$DISTANCE, pcdat_melt$BEH, sep=".")
+```
+
+`r length(unique(pcdat_melt$PkeySpDurDisBeh))` unique combinations of PKEY, SPECIES, DURATION, DISTANCE, AND BEHAVIOUR but `r nrow(pcdat_melt)` rows. suggesting `r nrow(pcdat_melt) - length(unique(pcdat_melt$PkeySpDurDisBeh))` duplicates
+
+NO DUPLICATES. 
+
+``` {r finding.UNGU.related.duplicates, eval=F}
+dupcombos <- unique(pcdat_melt[duplicated(pcdat_melt$PkeySpDurDisBeh),]$PkeySpDurDisBeh)
+kable(data.frame(PkeySpDurDistBeh=dupcombos))
+pcdat_melt_tmp <- pcdat_melt[pcdat_melt$PkeySpDurDisBeh %in% dupcombos,]
+kable(pcdat_melt_tmp, row.names=F)
+kable(head(pcdat[pcdat$SPECIES %in% "UNGU",]), row.names=F)
+codes[duplicated(codes$SPECIES),] #finding that duplicated species code...
+# All of these duplicates involve the same Species code (UNGU) -- the duplicates are from when I merged in the English names!! So I went back and updated my species code list to the 2015 version and now there's no duplicates. 
+```
+
+#### 4. Filter out unwanted data
+
+All point count data were included here, including all survey duration intervals and distance intervals. Also all behaviours. We want to exclude some of these. 
+
+##### First, check for potential systematic differences among surveys
+
+BC Models are to be built for all species, not individual species. Peter explored the possibility of a Total Bird offset, which corrects for survey methodlogy and detectability in general, but not individual species detectability. When my preliminary results didn't follow expected patterns in bird response to forest age and height, we started to wonder if the total offset is obscuring some of those patterns. 
+
+Peter suggests scaling all point counts to the same time/distance and then running analyses without a correction factor offset. This will be challenging if I want to include BBS data, which are unlimited distance surveys. 
+
+First thing to check... whether species means differ by survey method. 
+
+**Which surveys use the same methods?**
+
+* Survey method is indicated at the PKEY level
+    * Merge PKEY table with point count data to link method to data from individual point counts
+    * Merge resultant table with method legend so I know the distance and duration methods used. 
+
+**FILES**
+
+1. **BC_COFI_XY.csvNational_Proj_Summary_V4_2015.csv**
+
+```{r}
+
+```
+
+``` {r, eval=F}
+xy.pkey.pc <- merge(xy.pkey[c("SS", "METHOD", "ROUND", "PKEY", "YYYY", "MM", "DD", "StartTime", "obs")], pcdat, by="PKEY")
+
+
+projsum <- read.csv("")
+
+
+xy.pkey.pc.meth <- merge(xy.pkey.pc, )
+
+```
+
+
+* We only want to keep observations that were 
+
+
+
+
+
 
 **Notes**
 
@@ -277,33 +357,4 @@ kable(rbind(head(pcdat), tail(pcdat)), row.names=F, caption="First 6 and last 6 
 * Either way, the 0s aren't there for all surveys, so I have to add them
 
 
-#### Adding the zeroes for other 
-
-``` {r, eval=F}
-pcdat_melt <- melt(pcdat[c("PKEY", "SPECIES", "DURATION", "DISTANCE", "ABUND", "BEH")], measure.vars="ABUND") # bring dataset into molten
-
-#pcdat_wide <- cast(pcdat_melt, PKEY + DURATION + DISTANCE + BEH ~ SPECIES, value="ABUND") # reshape the dataset so we have ABUND as a function of PKEY, DURATION, DISTANCE, and  BEHAVIOUR 
-```
-
-Casting this shouldn't require aggregation. If it does, we'll need to explore.
- 
-``` {r}
-pcdat_melt$PkeySpDurDisBeh <- paste(pcdat_melt$PKEY, pcdat_melt$SPECIES, pcdat_melt$DURATION, pcdat_melt$DISTANCE, pcdat_melt$BEH, sep=".")
-```
-
-`r length(unique(pcdat_melt$PkeySpDurDisBeh))` unique combinations of PKEY, SPECIES, DURATION, DISTANCE, AND BEHAVIOUR but `r nrow(pcdat_melt)` rows. suggesting `r nrow(pcdat_melt) - length(unique(pcdat_melt$PkeySpDurDisBeh))` duplicates
-
-Find those duplicates...
-
-``` {r}
-dupcombos <- unique(pcdat_melt[duplicated(pcdat_melt$PkeySpDurDisBeh),]$PkeySpDurDisBeh)
-kable(data.frame(PkeySpDurDistBeh=dupcombos))
-pcdat_melt_tmp <- pcdat_melt[pcdat_melt$PkeySpDurDisBeh %in% dupcombos,]
-kable(pcdat_melt_tmp, row.names=F)
-kable(head(pcdat[pcdat$SPECIES %in% "UNGU",]), row.names=F)
-codes[duplicated(codes$SPECIES),] #finding that duplicated species code...
-```
-
-**Notes**
-
-* All of these duplicates involve the same Species code (UNGU) -- the duplicates are from when I merged in the English names!!
+#### Adding the zeroes for all species/surveys 
