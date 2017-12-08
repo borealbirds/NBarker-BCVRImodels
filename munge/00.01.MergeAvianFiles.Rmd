@@ -362,7 +362,7 @@ xy.pkey.pc.meth$DurDisCombo <- paste(xy.pkey.pc.meth$DURMETH, xy.pkey.pc.meth$DI
 
 Aggregate to "total bird" count per survey instance
 
-``` {r aggregate, eval=T}
+``` {r aggregate, eval=F}
 pc.tmp <- ddply()
 ```
 
