@@ -360,17 +360,49 @@ xy.pkey.pc.meth$DurDisCombo <- paste(xy.pkey.pc.meth$DURMETH, xy.pkey.pc.meth$DI
 
 `r length(unique(xy.pkey.pc.meth$DurDisCombo))` different combinations of methods used, across `r length(unique(xy.pkey.pc.meth$PCODE))` different projects.
 
+Subset to round1 and behaviour = 6 only
+
+``` {r}
+xy.pkey.pc.meth.round1 <- xy.pkey.pc.meth[xy.pkey.pc.meth$ROUND == 1 & xy.pkey.pc.meth$BEH == 6,]
+```
+
 Aggregate to "total bird" count per survey instance
 
-``` {r aggregate, eval=F}
-pc.tmp <- ddply()
+``` {r aggregate, eval=T}
+xy.pkey.pc.meth_tmp <- xy.pkey.pc.meth.round1[1:100,]
+
+pkey.sumabund <- aggregate(xy.pkey.pc.meth.round1$ABUND,  by=list(PKEY=xy.pkey.pc.meth.round1$PKEY), FUN=sum)
+colnames(pkey.sumabund)[2] <- "sumABUND"
+```
+
+Merge with original dataset to get details of methods
+
+``` {r reattribute.method}
+pkey.method <- xy.pkey.pc.meth.round1[c("PKEY", "DISTMETH", "DURMETH", "METHOD")]
+pkey.method <- pkey.method[!duplicated(pkey.method),]
+pkey.method$DistDurKey <- paste(pkey.method$DISTMETH, pkey.method$DURMETH, sep=".")
+
+pkey.sumabund <- merge(pkey.sumabund, pkey.method, by="PKEY")
 ```
 
 
 ``` {r compare.bird.means.by.method, eval=T}
+group.means <- aggregate(pkey.sumabund$sumABUND, by=list(DistDurKey=pkey.sumabund$DistDurKey), FUN=mean)
 
+# Create a key for all methods represented in the BC dataset
+durcodes <- read.csv("data/DD_duration_codes_methodology.csv", header=T)
+discodes <- read.csv("data/DD_distance_codes_methodology.csv", header=T)
+colnames(durcodes)[2] <- "DURMETH"
+colnames(discodes)[1] <- "DISTMETH"
+method.lookup <- pkey.method[c("DISTMETH", "DURMETH", "DistDurKey")]
+method.lookup <- method.lookup[!duplicated(method.lookup),]
+method.lookup <- merge(method.lookup, durcodes, by="DURMETH", all.x=T)
+method.lookup <- merge(method.lookup, discodes, by="DISTMETH", all.x=T)
 
+group.means <- merge(group.means, method.lookup, by="DistDurKey")
+group.means <- group.means[order(group.means$x, decreasing = T), c("DURATIONRANGE", "DISTANCERANGE", "x", "DURMETH", "DISTMETH")]
 
+kable(group.means, row.names=F)
 ```
 
 
