@@ -333,8 +333,9 @@ colnames(projs)[which(colnames(projs) == "Method")] <- "METHOD" #change colname
 projs.qs <- projs #quicksave
 projs <- projs[projs$PCODE %in% pkey$PCODE,] #projects I care about for now
 projs <- projs[order(projs$PCODE),] #sort by pcode
+projs$Maxdist <- toupper(projs$Maxdist)
 
-kable(projs[c("PCODE", "METHOD", "DURMETH", "DISTMETH", "ChangeMethod", "MaxDuration", "Maxdist", "Bands.")], row.names=F)
+kable(projs[c("PCODE", "METHOD", "DURMETH", "DISTMETH", "ChangeMethod", "MaxDuration", "Maxdist")], row.names=F)
 ```
 
 Next, merge pkey table with point count data. 
@@ -346,19 +347,18 @@ xy.pkey.pc <- merge(xy.pkey[c("SS", "METHOD", "ROUND", "PKEY", "YYYY", "MM", "DD
 Next, merge pkey/point count data with project summary to associate each point count survey with a method. 
 
 ``` {r merge.xy.pkey.pc.method, eval=T}
-xy.pkey.pc.meth <- merge(xy.pkey.pc, projs[c("PCODE", "METHOD", "DURMETH", "DISTMETH", "ChangeMethod", "MaxDuration", "Maxdist", "Bands.")], by="METHOD")
+xy.pkey.pc.meth <- merge(xy.pkey.pc, projs[c("PCODE", "METHOD", "DURMETH", "DISTMETH", "ChangeMethod", "MaxDuration", "Maxdist")], by="METHOD")
 ```
 
 Create unique ID for combination of duration and distance method
 
 ``` {r}
-xy.pkey.pc.meth$DurDisCombo <- paste(xy.pkey.pc.meth$DURMETH, xy.pkey.pc.meth$DISTMETH, sep=".")
-
+xy.pkey.pc.meth$DurDisKey <- paste(xy.pkey.pc.meth$DURMETH, xy.pkey.pc.meth$DISTMETH, sep=".")
 ```
 
 **Compare bird counts among different survey types**
 
-`r length(unique(xy.pkey.pc.meth$DurDisCombo))` different combinations of methods used, across `r length(unique(xy.pkey.pc.meth$PCODE))` different projects.
+`r length(unique(xy.pkey.pc.meth$DurDisKey))` different combinations of methods used, across `r length(unique(xy.pkey.pc.meth$PCODE))` different projects.
 
 Subset to round1 and behaviour = 6 only
 
@@ -369,8 +369,6 @@ xy.pkey.pc.meth.round1 <- xy.pkey.pc.meth[xy.pkey.pc.meth$ROUND == 1 & xy.pkey.p
 Aggregate to "total bird" count per survey instance
 
 ``` {r aggregate, eval=T}
-xy.pkey.pc.meth_tmp <- xy.pkey.pc.meth.round1[1:100,]
-
 pkey.sumabund <- aggregate(xy.pkey.pc.meth.round1$ABUND,  by=list(PKEY=xy.pkey.pc.meth.round1$PKEY), FUN=sum)
 colnames(pkey.sumabund)[2] <- "sumABUND"
 ```
@@ -378,45 +376,38 @@ colnames(pkey.sumabund)[2] <- "sumABUND"
 Merge with original dataset to get details of methods
 
 ``` {r reattribute.method}
-pkey.method <- xy.pkey.pc.meth.round1[c("PKEY", "DISTMETH", "DURMETH", "METHOD")]
+pkey.method <- xy.pkey.pc.meth.round1[c("PKEY", "DISTMETH", "DURMETH", "METHOD", "MaxDuration", "Maxdist", "DurDisKey")]
 pkey.method <- pkey.method[!duplicated(pkey.method),]
-pkey.method$DistDurKey <- paste(pkey.method$DISTMETH, pkey.method$DURMETH, sep=".")
 
 pkey.sumabund <- merge(pkey.sumabund, pkey.method, by="PKEY")
 ```
 
+Calculate mean abundance by method
 
 ``` {r compare.bird.means.by.method, eval=T}
-group.means <- aggregate(pkey.sumabund$sumABUND, by=list(DistDurKey=pkey.sumabund$DistDurKey), FUN=mean)
+method.means <- aggregate(pkey.sumabund$sumABUND, by=list(DurDisKey=pkey.sumabund$DurDisKey), FUN=mean) # abundance per unique method
+colnames(method.means)[2] <- "MeanAbund"
+
+method.counts <- aggregate(pkey.sumabund$sumABUND, by=list(DurDisKey=pkey.sumabund$DurDisKey), FUN=length) # number of PKEYs (i.e. survey occasions) per unique method. 
+colnames(method.counts)[2] <- "CountSurveys"
 
 # Create a key for all methods represented in the BC dataset
 durcodes <- read.csv("data/DD_duration_codes_methodology.csv", header=T)
 discodes <- read.csv("data/DD_distance_codes_methodology.csv", header=T)
 colnames(durcodes)[2] <- "DURMETH"
 colnames(discodes)[1] <- "DISTMETH"
-method.lookup <- pkey.method[c("DISTMETH", "DURMETH", "DistDurKey")]
+method.lookup <- pkey.method[c("DISTMETH", "DURMETH", "DurDisKey", "MaxDuration", "Maxdist")]
 method.lookup <- method.lookup[!duplicated(method.lookup),]
 method.lookup <- merge(method.lookup, durcodes, by="DURMETH", all.x=T)
 method.lookup <- merge(method.lookup, discodes, by="DISTMETH", all.x=T)
 
-group.means <- merge(group.means, method.lookup, by="DistDurKey")
-group.means <- group.means[order(group.means$x, decreasing = T), c("DURATIONRANGE", "DISTANCERANGE", "x", "DURMETH", "DISTMETH")]
+method.means <- merge(method.means, method.lookup[c("DurDisKey", "DISTMETH", "DURMETH", "MaxDuration", "Maxdist", "DURATIONRANGE", "DISTANCERANGE")], by="DurDisKey")
+method.stats <- merge(method.means, method.counts, by="DurDisKey")
 
-kable(group.means, row.names=F)
+method.stats <- method.stats[order(method.stats$MaxDuration, method.stats$Maxdist), c("DurDisKey", "DURMETH","DISTMETH", "MaxDuration", "Maxdist", "DURATIONRANGE", "DISTANCERANGE", "CountSurveys", "MeanAbund")]
+
+kable(method.stats, row.names=F)
 ```
 
 
 
-
-
-
-
-
-**Notes**
-
-* There shouldn't be any non-occurrences in the database. i.e., if a species wasn't observed during a given survey, it isn't recorded in the database. We can check this by running `nrow(pcdat[pcdat$ABUND %in% 0,])`: `r nrow(pcdat[pcdat$ABUND %in% 0,])`.
-* For reasons I don't understand, some PKEYs have 0 ABUND. I'm not going to investigate this further, and just assume that there's a good reason. 
-* Either way, the 0s aren't there for all surveys, so I have to add them
-
-
-#### Adding the zeroes for all species/surveys 
