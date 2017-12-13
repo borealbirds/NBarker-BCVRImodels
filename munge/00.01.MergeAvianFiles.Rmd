@@ -1,7 +1,7 @@
 ---
 title: "00.01.MergeAvianFiles"
 author: "Nicole Barker"
-date: "Last run: Nov 30, 2017"
+date: "Last run: Dec. 12, 2017"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -16,7 +16,11 @@ On Nov 30, 2017, Trish provided me with the Access Database of BAM's avian data:
 2. **BC_COFI_PKEY.txt**
 3. **BC_COFI_POINTCOUNT.txt**
 
-In this script, I inspect the table format and ensure I can get everything in the format I need.
+This script does the following
+
+* Look for and eliminate duplications
+* Correct any errors noticed during pre-processing
+* 
 
 ``` {r setup, echo=F, message=F, warning=F}
 require(knitr)
@@ -29,7 +33,7 @@ load.project()
 options(digits=12)
 ```
 
-### Load 3 datasets
+### Initial Quality Check and Removal of Duplicates
 #### 1. XY Coordinates of each survey site: *BC_COFI_XY.txt*
 ``` {r load.xy}
 xy<- read.csv("data/BC_COFI_XY.csv")
@@ -305,27 +309,28 @@ codes[duplicated(codes$SPECIES),] #finding that duplicated species code...
 # All of these duplicates involve the same Species code (UNGU) -- the duplicates are from when I merged in the English names!! So I went back and updated my species code list to the 2015 version and now there's no duplicates. 
 ```
 
-#### 4. Filter out unwanted data
-
-All point count data were included here, including all survey duration intervals and distance intervals. Also all behaviours. We want to exclude some of these. 
-
-##### First, check for potential systematic differences among surveys
+### Check for Systematic Differences Among Surveys
 
 BC Models are to be built for all species, not individual species. Peter explored the possibility of a Total Bird offset, which corrects for survey methodlogy and detectability in general, but not individual species detectability. When my preliminary results didn't follow expected patterns in bird response to forest age and height, we started to wonder if the total offset is obscuring some of those patterns. 
 
-Peter suggests scaling all point counts to the same time/distance and then running analyses without a correction factor offset. This will be challenging if I want to include BBS data, which are unlimited distance surveys. 
+Peter suggested scaling all point counts to the same time/distance and then running analyses without a correction factor offset. This will be challenging if I want to include BBS data, which are unlimited distance surveys. 
 
 First thing to check... whether species means differ by survey method. 
 
-**Which surveys use the same methods?**
+#### Which surveys use the same methods?
 
 * Survey method is indicated at the PKEY level
     * Merge PKEY table with point count data to link method to data from individual point counts
     * Merge resultant table with method legend so I know the distance and duration methods used. 
+    * Calculate means and counts of surveys per method
+    
+If there are systematic differences in mean abundance, I can't simiply lump all data together in one analysis because variation caused by methods will cause non-random spatial biases in abundances. 
 
 **FILES**
 
 1. **National_Proj_Summary_V4_2015.csv**
+2. **DD_duration_codes_methodology.csv**
+3. **DD_distance_codes_methodology.csv**
 
 ```{r, load.proj.summary}
 projs <- read.csv("data/National_Proj_Summary_V4_2015.csv", header=T)
@@ -356,7 +361,7 @@ Create unique ID for combination of duration and distance method
 xy.pkey.pc.meth$DurDisKey <- paste(xy.pkey.pc.meth$DURMETH, xy.pkey.pc.meth$DISTMETH, sep=".")
 ```
 
-**Compare bird counts among different survey types**
+#### Compare bird counts among different survey types
 
 `r length(unique(xy.pkey.pc.meth$DurDisKey))` different combinations of methods used, across `r length(unique(xy.pkey.pc.meth$PCODE))` different projects.
 
@@ -409,5 +414,20 @@ method.stats <- method.stats[order(method.stats$MaxDuration, method.stats$Maxdis
 kable(method.stats, row.names=F)
 ```
 
+## Conclusions
 
+* Yup there are systematic differences among surveys / methods, so I can't simply lump everything in a single analysis. 
+* I met with Peter Solymos on Dec 11 to discuss, and we came up with the following plans: 
+    * Peter thinks his total bird offset still makes sense. It corrects for survey method and for effects of time of year and of day on detectability... just not for species-specific EDR and singing rate, for example. 
+    * If I want an alternative I could do the following: 
+        * Use survey method as correction FACTORs in model, based on max duration and max distance
+            * 3 levels for duration: max duration is 3, 5/6, or 8/10
+            * 3 levels for distance: max distance is 50, 80/100, and 150/unlimited
+        * Response variable is total abundance per PKEY (don't try to subset based on survey interval or band)
+        * These two factors are additive, not interactive
+        * Could include PCODE in addition to the above... to see if there are effects of Project independent of method
+
+## Next Steps
+
+* Clean up VRI data
 

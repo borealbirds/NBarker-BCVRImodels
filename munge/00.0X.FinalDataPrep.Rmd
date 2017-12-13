@@ -1,0 +1,21 @@
+---
+title: "Prep Data for Analysis"
+author: "Nicole Barker"
+date: "December 12, 2017"
+output: html_document
+---
+
+All point count data were included here, including all survey duration intervals and distance intervals. Also all behaviours. We want to exclude some of these. 
+
+##### 
+
+
+
+**Notes**
+
+* There shouldn't be any non-occurrences in the database. i.e., if a species wasn't observed during a given survey, it isn't recorded in the database. We can check this by running `nrow(pcdat[pcdat$ABUND %in% 0,])`: `r nrow(pcdat[pcdat$ABUND %in% 0,])`.
+* For reasons I don't understand, some PKEYs have 0 ABUND. I'm not going to investigate this further, and just assume that there's a good reason. 
+* Either way, the 0s aren't there for all surveys, so I have to add them
+
+
+#### Adding the zeroes for all species/surveys 

@@ -13,7 +13,9 @@ Nicole codes using RMarkdown, embedding code and results with extensive commenta
 
 ### Scripts used for this round
 
-1. **00.01.MergeAvianFiles.Rmd** - Quality-checks, corrects, pre-processes, and merges the various tables from BAM's Avian Database to produce a table ready to use in analyses of point count data. 
+1. **00.01.MergeAvianFiles.Rmd** - Quality-checks, corrects, pre-processes, and merges the various tables from BAM's Avian Database. Performs some initial tests of patterns in avian data by survey method to help decide how to harmonize the data.
+
+2. **00.02.MergeVRIIntersectFiles.Rmd** - 
 
 
 
