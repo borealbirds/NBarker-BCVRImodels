@@ -15,7 +15,9 @@ Nicole codes using RMarkdown, embedding code and results with extensive commenta
 
 1. **00.01.MergeAvianFiles.Rmd** - Quality-checks, corrects, pre-processes, and merges the various tables from BAM's Avian Database. Performs some initial tests of patterns in avian data by survey method to help decide how to harmonize the data.
 
-2. **00.02.MergeVRIIntersectFiles.Rmd** - 
+STILL NEED TO ACTUALLY MAKE CORRECTIONS TO EXCLUDE SOME OF THE DUPLICATED DATASETS
+
+2. **00.02.MergeVRIIntersectFiles.Rmd** - Quality-checks, corrects, and pre-processes the various intersections of BAM's Avian Database with two VRI datasets: the provincial one, modified by Forsite to produce the 4 derived attributes used in ranking; and the VRI obtaind directly from Canfor that doesn't have those 4 derived attributes. 
 
 
 

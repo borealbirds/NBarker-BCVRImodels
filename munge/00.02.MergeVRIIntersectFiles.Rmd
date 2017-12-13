@@ -1,7 +1,7 @@
 ---
-title: "00.02.VRIIntersectFiles"
+title: "00.02.MergeVRIIntersectFiles"
 author: "Nicole Barker"
-date: "Last run: Dec 12, 2017"
+date: "Last run: Dec 13, 2017"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -22,7 +22,7 @@ On Nov 28, 2017, Trish sent me intersections between the latest avian data and t
 In this script, I: 
 
 * Inspect each file independently for duplicates
-* 
+* Inspect the combind file for duplicates and make decision on which to exclude
 
 ``` {r setup, echo=F, message=F, warning=F}
 require(knitr)
@@ -216,10 +216,10 @@ kable(forsitedat[forsitedat$SS %in% forsitedat$SS[duplicated(forsitedat$SS)],], 
 ``` {r combine.all.datasets}
 colnames(canfordat)[4] <- "FID_VRI"
 colnames(forsitedat)[4] <- "FID_VRI"
-alldat <- rbind(canfordat, forsitedat)
+alldat.sm <- rbind(canfordat, forsitedat)
 
-sum(duplicated(alldat$SS))
-dupSS <- alldat$SS[duplicated(alldat$SS)]
+sum(duplicated(alldat.sm$SS))
+dupSS <- alldat.sm$SS[duplicated(alldat.sm$SS)]
 
 kable(canfordat[canfordat$SS %in% dupSS[10:30],], row.names=F)
 kable(forsitedat[forsitedat$SS %in% dupSS[10:30],], row.names=F)
@@ -228,20 +228,20 @@ kable(forsitedat[forsitedat$SS %in% dupSS[10:30],], row.names=F)
 Which PCODEs are represented in the duplicated SS?
 
 ``` {r}
-sort(as.character(unique(alldat$PCODE[which(alldat$SS %in% dupSS)])))
+sort(as.character(unique(alldat.sm$PCODE[which(alldat.sm$SS %in% dupSS)])))
 ```
 
 **BCCA**
 ``` {r}
-kable(alldat[alldat$SS %in% dupSS & alldat$PCODE %in% "BCCA",], row.names=F)
+kable(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "BCCA",], row.names=F)
 ```
 
 * BCCA: 3 SS duplicated. Same three I expected before. 
 
 **BL2TFL48**
 ``` {r}
-kable(rbind(head(alldat[alldat$SS %in% dupSS & alldat$PCODE %in% "BL2TFL48",], 10),
-            tail(alldat[alldat$SS %in% dupSS & alldat$PCODE %in% "BL2TFL48",], 10)), row.names=F)
+kable(rbind(head(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "BL2TFL48",], 10),
+            tail(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "BL2TFL48",], 10)), row.names=F)
 ```
 
 ![ ^^^ Image. Example for PCODE BL2TFL48](../output/BL2TFL48.jpg)
@@ -251,8 +251,8 @@ kable(rbind(head(alldat[alldat$SS %in% dupSS & alldat$PCODE %in% "BL2TFL48",], 1
 
 **CF**
 ``` {r}
-kable(rbind(head(alldat[alldat$SS %in% dupSS & alldat$PCODE %in% "CF",], 10),
-            tail(alldat[alldat$SS %in% dupSS & alldat$PCODE %in% "CF",], 10)), row.names=F)
+kable(rbind(head(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "CF",], 10),
+            tail(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "CF",], 10)), row.names=F)
 ```
 
 ![ ^^^ Image. Example for SS CF.Murray.38 ](../output/CF.Murray.38.jpg)
@@ -263,8 +263,8 @@ kable(rbind(head(alldat[alldat$SS %in% dupSS & alldat$PCODE %in% "CF",], 10),
 
 **CW**
 ``` {r}
-kable(rbind(head(alldat[alldat$SS %in% dupSS & alldat$PCODE %in% "CF",], 10),
-            tail(alldat[alldat$SS %in% dupSS & alldat$PCODE %in% "CF",], 10)), row.names=F)
+kable(rbind(head(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "CF",], 10),
+            tail(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "CF",], 10)), row.names=F)
 ```
 
 * CW: Same as for CF and BL2TFL48: stations intersect polygons in Forsite's shapefile that are missing key information, such as SpeciesGroup, resulting in NULL RANK.
@@ -273,12 +273,104 @@ kable(rbind(head(alldat[alldat$SS %in% dupSS & alldat$PCODE %in% "CF",], 10),
 
 **TFL48VM**
 ``` {r}
-kable(rbind(head(alldat[alldat$SS %in% dupSS & alldat$PCODE %in% "TFL48VM",], 10),
-            tail(alldat[alldat$SS %in% dupSS & alldat$PCODE %in% "TFL48VM",], 10)), row.names=F)
+kable(rbind(head(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "TFL48VM",], 10),
+            tail(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "TFL48VM",], 10)), row.names=F)
 ```
 
 * TFL48VM: Same as for CW, CF, and BL2TFL48: stations intersect polygons in Forsite's shapefile that are missing key information, such as SpeciesGroup, resulting in NULL RANK.
     * ACTION: Choose CanforTFL intersection for these. Identify them by looking for a null value in either SPECIES_CD_1, BEC_ZONE_CODE, PROJ_AGE_1, or PROJ_HEIGHT_1.
 
+### Combine the various datasets and then subset to the rows where we have attributes for all needed columns
 
+Add blank derived columns to the CanforTFL dataset so that I can include those columns from the Forsite file
+
+``` {r}
+canfortfl$BecZone <- NA                 
+canfortfl$SpeciesGroup <- NA
+canfortfl$Age <- NA
+canfortfl$Height <- NA
+canfortfl$Rank <- NA
+canfortfl$FD_PERCENT <- NA
+canfortfl$PL_PERCENT <- NA
+canfortfl$AT_PERCENT <- NA
+canfortfl$Decid_PERCENT <- NA
+
+canfortflwsi$BecZone <- NA                 
+canfortflwsi$SpeciesGroup <- NA
+canfortflwsi$Age <- NA
+canfortflwsi$Height <- NA
+canfortflwsi$Rank <- NA
+canfortflwsi$FD_PERCENT <- NA
+canfortflwsi$PL_PERCENT <- NA
+canfortflwsi$AT_PERCENT <- NA
+canfortflwsi$Decid_PERCENT <- NA
+```
+
+Add layer name to each file 
+
+``` {r}
+atlas$VRIintersectLayer <- "FID_BC_BCCA_SelectedMigLayer"
+bam$VRIintersectLayer <- "FID_BCdatanat4"
+bbs$VRIintersectLayer <- "FID_XYBC_BBS_v3"
+canfortfl$VRIintersectLayer <- "FID_XYBC_Natv4_TFLCanfor"
+canfortflwsi$VRIintersectLayer <- "FID_XY_WSI_TFLCanfor"
+wsi$VRIintersectLayer <- "FID_BAMNATV4BConly"
+```
+
+Change colnames to standard ones
+``` {r}
+colnames(atlas)[c(2,8)] <- c("FID_BIRD", "FID_VRI")
+colnames(bam)[c(2,15)] <- c("FID_BIRD", "FID_VRI")
+colnames(bbs)[c(2,18)] <- c("FID_BIRD", "FID_VRI")
+colnames(canfortfl)[c(2, 15)] <- c("FID_BIRD", "FID_VRI")
+colnames(canfortflwsi)[c(2,12)] <- c("FID_BIRD", "FID_VRI")
+colnames(wsi)[c(2,12)] <- c("FID_BIRD", "FID_VRI")
+```
+
+``` {r}
+neededcols <- c('SS', 'FID_BIRD', 'FID_VRI', 'VRIintersectLayer', 'MAP_ID', 'POLYGON_ID', 'OPENING_IND', 'INPUT_DATE', 'INTERPRETATION_DATE', 'PROJECT', 'REFERENCE_YEAR', 'ATTRIBUTION_BASE_DATE', 'PROJECTED_DATE', 'BEC_ZONE_CODE', 'BEC_SUBZONE', 'BEC_VARIANT', 'BEC_PHASE', 'EARLIEST_NONLOGGING_DIST_TYPE', 'EARLIEST_NONLOGGING_DIST_DATE', 'STAND_PERCENTAGE_DEAD', 'FREE_TO_GROW_IND', 'HARVEST_DATE', 'INTERPRETED_DATA_SRC_CD', 'CROWN_CLOSURE', 'REFERENCE_DATE',  'VRI_LIVE_STEMS_PER_HA', 'DATA_SRC_VRI_LIVE_STEM_HA_CD', 'VRI_DEAD_STEMS_PER_HA', 'TREE_COVER_PATTERN', 'VERTICAL_COMPLEXITY', 'SPECIES_CD_1', 'SPECIES_PCT_1', 'SPECIES_CD_2', 'SPECIES_PCT_2', 'SPECIES_CD_3', 'SPECIES_PCT_3', 'SPECIES_CD_4', 'SPECIES_PCT_4', 'SPECIES_CD_5', 'SPECIES_PCT_5', 'SPECIES_CD_6', 'SPECIES_PCT_6', 'PROJ_AGE_1', 'PROJ_AGE_CLASS_CD_1', 'PROJ_AGE_2', 'PROJ_AGE_CLASS_CD_2', 'DATA_SOURCE_AGE_CD', 'PROJ_HEIGHT_1', 'PROJ_HEIGHT_CLASS_CD_1', 'PROJ_HEIGHT_2', 'PROJ_HEIGHT_CLASS_CD_2', 'DATA_SOURCE_HEIGHT_CD', 'BecZone', 'SpeciesGroup', 'Age', 'Height', 'Rank', 'FD_PERCENT', 'PL_PERCENT', 'AT_PERCENT', 'Decid_PERCENT')
+
+alldat <- rbind(atlas[neededcols], bam[neededcols], bbs[neededcols], wsi[neededcols], canfortfl[neededcols], canfortflwsi[neededcols])
+
+alldat.hasdat <- alldat[!is.na(alldat$BEC_ZONE_CODE),]
+alldat.hasdat <- alldat[!is.na(alldat$SPECIES_CD_1),]
+alldat.hasdat <- alldat[!is.na(alldat$PROJ_AGE_1),]
+alldat.hasdat <- alldat[!is.na(alldat$PROJ_HEIGHT_1),]
+```
+
+### Write the data to a file for future use
+
+``` {r}
+write.table(alldat.hasdat, "data/birdVRIintersect_preprocess1.csv", row.names=F, col.names=T, sep=",")
+```
+
+### Focus on Distance to Nearest polygon/stand edge
+
+Because we're working with two different VRI shapefiles, some of the point count SSs will have two distances to nearest polygons.. one from the CanforTFL and one from the Forsite "mig birds" VRI file. 
+
+![ ^^^ Image. Example for SS BL2TFL48:Block2:59 and distance to edge to both the CanforTFL layer and the Forsite mig birds layer. NEAR_FID refers to the OBJECT_ID in the polyline shapefile for the VRI shapefiles](../output/DistanceToEdgeExample.jpg)
+
+Here I need to identify those and save only the shortest distance. 
+
+``` {r}
+neededcols2 <- c('SS', 'FID_BIRD', 'FID_VRI', 'VRIintersectLayer', "PCODE", "NEAR_FID", "NEAR_DIST")
+  
+alldat.fordisttoedge <- rbind(atlas[neededcols2], bam[neededcols2], bbs[neededcols2], wsi[neededcols2], canfortfl[neededcols2], canfortflwsi[neededcols2])
+```
+
+`r sum(duplicated(alldat.fordisttoedge$SS))` duplicated SSs. 
+
+
+``` {r}
+dupSS <- alldat.fordisttoedge$SS[duplicated(alldat.fordisttoedge$SS)]
+
+alldat.fordisttoedge.nodups <-  alldat.fordisttoedge[!alldat.fordisttoedge$SS %in% dupSS,]
+alldat.fordisttoedge.dups <-  alldat.fordisttoedge[alldat.fordisttoedge$SS %in% dupSS,]
+
+alldat.fordisttoedge.dups <- alldat.fordisttoedge.dups[order(alldat.fordisttoedge.dups$SS, alldat.fordisttoedge.dups$NEAR_DIST),]
+
+sampleSS <- sample(dupSS, 30)
+
+kable(alldat.fordisttoedge.dups[alldat.fordisttoedge.dups$SS %in% sampleSS,], row.names=F)
+```
 
