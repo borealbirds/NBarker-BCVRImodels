@@ -13,11 +13,15 @@ Nicole codes using RMarkdown, embedding code and results with extensive commenta
 
 ### Scripts used for this round
 
-1. **00.01.MergeAvianFiles.Rmd** - Quality-checks, corrects, pre-processes, and merges the various tables from BAM's Avian Database. Performs some initial tests of patterns in avian data by survey method to help decide how to harmonize the data.
+1. **00.01.MergeAvianFiles.Rmd** - Quality-checks, corrects, pre-processes, and merges the various tables from BAM's Avian Database. Removes duplicates. Performs some initial tests of patterns in avian data by survey method to help decide how to harmonize the data. 
+Combines spatial data (SS), survey instance (PKEY), and point count (ABUND) data into one flat dataset and saves as csv for future use: _data/birddata_preprocess1.csv_
 
-STILL NEED TO ACTUALLY MAKE CORRECTIONS TO EXCLUDE SOME OF THE DUPLICATED DATASETS
 
-2. **00.02.MergeVRIIntersectFiles.Rmd** - Quality-checks, corrects, and pre-processes the various intersections of BAM's Avian Database with two VRI datasets: the provincial one, modified by Forsite to produce the 4 derived attributes used in ranking; and the VRI obtaind directly from Canfor that doesn't have those 4 derived attributes. 
+2. **00.02.MergeVRIIntersectFiles.Rmd** - Quality-checks, corrects, and pre-processes the various intersections of BAM's Avian Database with two VRI datasets: 
+* the provincial one, modified by Forsite to produce the 4 derived attributes used in ranking; and
+* the VRI obtaind directly from Canfor that doesn't have those 4 derived attributes.
+Produces a cleaned dataset for future use: _birdVRIintersect_preprocess1.csv_
+
 
 
 
