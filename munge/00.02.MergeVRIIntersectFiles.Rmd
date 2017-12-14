@@ -438,6 +438,17 @@ alldat.hasdat <- alldat.hasdat[!is.na(alldat.hasdat$PROJ_HEIGHT_1),]
 write.table(alldat.hasdat, "data/birdVRIintersect_preprocess1.csv", row.names=F, col.names=T, sep=",")
 ```
 
+## Conclusions
+
+* I think I removed the unwanted duplicates
+
+## Next Steps
+
+* Create two separate VRI files: 
+    * one for analyses using Kari/Forsite's 4 derived attributes (will exclude Canfor TFL); and
+    * one for density models (using variables from VRI directly, not derived )
+* 
+    
 
 
 
