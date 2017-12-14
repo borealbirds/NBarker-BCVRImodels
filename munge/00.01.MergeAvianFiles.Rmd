@@ -49,6 +49,7 @@ xy <- xy[xy$X != 0,]
 
 **Notes**
 
+* `r unique(xy.qs[is.na(xy.qs$X),]$PCODE)` have SSs without X coordinates
 * ACTION: Suggest Trish could look into datasets without coordinates. 
 
 #### 2. Sampling Occasions: *BC_COFI_PKEY.txt*
@@ -79,8 +80,9 @@ xy.pkey$PCODE.SITE <- paste(xy.pkey$PCODE, xy.pkey$SITE, sep=".")
 
 ##### Fix Dates
 
-* remove sites without  dates. 
+* remove sites without dates. The following PCODEs all have at least one SS without a MM: `r unique(xy.pkey[is.na(xy.pkey$MM),]$PCODE)`
 * Switch MM and DD for GMSMON15
+
 ``` {r fix.dates, eval=T}
 xy.pkey.qs <- xy.pkey
 xy.pkey <- xy.pkey[!is.na(xy.pkey$MM),]
@@ -233,7 +235,8 @@ kable(xy.pkey.locdatetimeobsdups[c(1:25, (nrow(xy.pkey.locdatetimeobsdups)-25):n
 Investigating on a case by case basis. 
 
 * SRDR.M68_3: There's a STN 8 and a STN 9 at the exact same coordinates, surveyed at the exact same time. But with different species lists. ACTION: Keep both for now. 
-* KMART:KNIFEKN: B2: looks like it might be a typo extra space in the SS/STN. Results in different bird data, but I think maybe it's supposed to be for the same site. ACTION: I changed the SS and STN name in the hopes that it would fix the problem, but it probably won't. I may need to remove this STN from the dataset. 
+* KMART:KNIFEKN: B2: looks like it might be a typo extra space in the SS/STN. Results in different bird data, but I think maybe it's supposed to be for the same site.       
+    * ACTION: I changed the SS and STN name in the hopes that it would fix the problem, but it probably won't. I may need to remove this STN from the dataset. 
 * BCCA: In some of the pairs I checked, the surveys are at the same location, started at the same time, and done by the same observer. They have similar but not identical bird list.
 
 ![ ^^^ Image. Example BCCA:08MM11 at 6:37 am by observer 117. Entry 1 has FOSP while Entry 2 doesn't; Entry 2 has SAVS and WCSP while Entry 1 doesn't](../output/ExampleDataDuplication6.jpg)
@@ -309,6 +312,49 @@ codes[duplicated(codes$SPECIES),] #finding that duplicated species code...
 # All of these duplicates involve the same Species code (UNGU) -- the duplicates are from when I merged in the English names!! So I went back and updated my species code list to the 2015 version and now there's no duplicates. 
 ```
 
+#### Combine PC dat with xy.pkey and write to a file for future use
+
+Testing to see which PKEY have no bird data, and which bird data have no associated spatial data
+
+``` {r}
+xy.pkey.pc1 <- merge(xy.pkey[c("PCODE", "SITE", "STN", "METHOD", "YYYY", "MM", "DD", "ROUND", "StartTime", "SS", "PKEY")], pcdat, by="PKEY", all.x =T) # merge with all pkey with xy coordinates, regardless of presence of bird data
+
+head(xy.pkey.pc1[is.na(xy.pkey.pc1$ABUND),])
+```
+
+`r length(xy.pkey.pc1[is.na(xy.pkey.pc1$ABUND),]$PKEY)` unique PKEYs have no bird data associated with them. In PCODEs: `r unique(xy.pkey.pc1[is.na(xy.pkey.pc1$ABUND),]$PCODE)`
+
+``` {r}
+xy.pkey.pc2 <- merge(xy.pkey[c("PCODE", "SITE", "STN", "METHOD", "YYYY", "MM", "DD", "ROUND", "StartTime", "SS", "PKEY")], pcdat, by="PKEY", all.y =T) # merge with all abund data, regardless of presence of xy coordinates
+
+head(xy.pkey.pc2[is.na(xy.pkey.pc2$PCODE),])
+
+xy.pkey.pc2$PCODE_derived <- unlist(lapply(strsplit(as.character(xy.pkey.pc2$PKEY), ":"), function(x) {x[1]}))
+
+```
+
+`r length(unique(xy.pkey.pc2[is.na(xy.pkey.pc2$PCODE),]$PKEY))` unique PKEYs have bird data, but are missing some element from survey method such as spatial location, date, etc. In PCODEs: `r unique(xy.pkey.pc2[is.na(xy.pkey.pc2$PCODE),]$PCODE_derived)`
+
+``` {r}
+
+xy.pkey.pc3 <- merge(xy.pkey[c("PCODE", "SITE", "STN", "METHOD", "YYYY", "MM", "DD", "ROUND", "StartTime", "SS", "PKEY")], pcdat, by="PKEY", all =T) # keeps all pkeys even if missing some data
+
+```
+
+``` {r}
+xy.pkey.pc4 <- merge(xy.pkey[c("PCODE", "SITE", "STN", "METHOD", "YYYY", "MM", "DD", "ROUND", "StartTime", "SS", "PKEY")], pcdat, by="PKEY") # merge only where we have all data
+
+head(xy.pkey.pc4[is.na(xy.pkey.pc4$ABUND),])
+```
+
+In omitting PKEYs where we're missing some data (either bird data or survey / methodological information), we omit `r length(unique(xy.pkey.pc3$PKEY)) - length(unique(xy.pkey.pc4$PKEY))` PKEYs. 
+
+##### Write the table that includes NAs, for now. 
+``` {r}
+write.table(xy.pkey.pc3, file="data/birddata_preprocess1.csv", sep=",", row.names=F, col.names=T)
+```
+
+
 ### Check for Systematic Differences Among Surveys
 
 BC Models are to be built for all species, not individual species. Peter explored the possibility of a Total Bird offset, which corrects for survey methodlogy and detectability in general, but not individual species detectability. When my preliminary results didn't follow expected patterns in bird response to forest age and height, we started to wonder if the total offset is obscuring some of those patterns. 
@@ -343,10 +389,10 @@ projs$Maxdist <- toupper(projs$Maxdist)
 kable(projs[c("PCODE", "METHOD", "DURMETH", "DISTMETH", "ChangeMethod", "MaxDuration", "Maxdist")], row.names=F)
 ```
 
-Next, merge pkey table with point count data. 
+Next, use table that merges xy.pkey with point count data (the one where eall data are intact, not missing)
 
-``` {r merge.xy.pkey.pc, eval=T}
-xy.pkey.pc <- merge(xy.pkey[c("SS", "METHOD", "ROUND", "PKEY", "YYYY", "MM", "DD", "StartTime", "obs")], pcdat, by="PKEY")
+``` {r merged.xy.pkey.pc, eval=T}
+xy.pkey.pc <- xy.pkey.pc4
 ```
 
 Next, merge pkey/point count data with project summary to associate each point count survey with a method. 
