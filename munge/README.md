@@ -23,23 +23,14 @@ Combines spatial data (SS), survey instance (PKEY), and point count (ABUND) data
 Produces a cleaned dataset for future use: _birdVRIintersect_preprocess1.csv_
 
 
+3. **01.01.FixTreeSpeciesCodes.Rmd** - Identify the various tree species codes used in different files going into your analyses. Using the standardized species code lookup table, add a new column containing the standardized tree species gorup code.
+
+
+4. **01.02.CheckFixStandArea.Rmd** - Calculate area per forest stand type by aggregating the polygon areas I calculated in ArcGIS. Compare these areas to those calculated independently by Barb Sobota, a tech with CWS. Then create a final dataset of forest stand area by stand type to be used in subsequent analyses. 
 
 
 
-
-
-
-
-### Older files 
-
-
-* 01.01a.TreeSpeciesCodes_Troubleshoot.Rmd: Identify the various tree species codes used in different files going into your analyses. Identify files requiring correction/standardization.
-
-* 01.01b.TreeSpeciesCodes_Fix.Rmd: Using the standardized species code lookup table, fix all files that have tree species codes. 
-
-### Files used before this round of analyses, and included just for reference:
-
-
+5. **01.03.CheckFixRanks.Rmd** - 
 
 
 

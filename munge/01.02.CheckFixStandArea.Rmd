@@ -1,0 +1,214 @@
+---
+title: "Calculate Forest Areas from Shapefile"
+author: "Nicole Barker"
+date: "Dec 14, 2017"
+output: 
+  word_document:
+    reference_docx: ../styles/ReportFormat_1.docx
+---
+
+# Purpose: Calculate areas of forest stand types 
+
+**Background & Motivation:** Forsite supplied forest area in the matrix format, in a file called __area_summary_with_matrix.xlsx__. In early analyses, I noticed some odd results, such as finding point counts in a forest stand type with 0 area. 
+
+So here, I'm re-calculating areas based on the shapefile received from Forsite. And then I'm comparing to results supplied to me by Barb, who did some GIS work to confirm my results. 
+
+**Steps:**
+
+* Load export of VRI file
+* Summarize polygon_area by forest stand ID 
+* Compare my calculated areas to Barb's areas
+
+``` {r setup, echo=F, message=F, warning=F}
+require(knitr)
+opts_knit$set(root.dir = '..')
+```
+
+```{r startup, echo=F, message=FALSE, warning=FALSE}
+require(ProjectTemplate)
+load.project()
+```
+
+### 1. Load export of VRI file
+
+This is an export of the attribute table of the forsite "mig birds layer". Before exporting, I used "Calculate geometry" in ArcGIS to calculate the area, in hectares, of each polygon. After exporting, I standardized the tree species groups in the "TreeSpeciesCodes_Fix" script.
+
+```{r load.vri.export.data, echo=T}
+vri <- read.csv("data/mig_birds_Layer_polyarea_forstandatts-zSpGroup.csv")  
+colnames(vri)[which(colnames(vri)=="code_use")] <- "SpeciesGroup" #rename standardized species codes to "SpeciesGroup"
+
+vri.reduced <- vri[c("BecZone", "SpeciesGroup", "Age", "Height",  "OBJECTID", "FEATURE_ID", "polygon_area_cal")]  # shrink to essential columns 
+
+vri.reduced$ForID <- with(vri.reduced, paste(BecZone, SpeciesGroup, Age, Height, sep=".")) # create ForId
+
+vri.red <- vri.reduced[vri.reduced$ForID %in% mastermatrix$ForID,] # subset the vri file for  those Forest Stands that are in the mastermatrix. These are those comprised of the subset of each attribute we care about.
+```
+
+#### Initial exploration to understand the format of the shapefile attribute table
+
+* Number of unique objects in the polygon attribute table (OBJECTID): `r length(unique(vri.reduced$OBJECTID))`
+* Number of unique polygons in the polygon attribute table (FEATURE_I): `r length(unique(vri.reduced$FEATURE_ID))`
+* Length of the attribute table (nrows): `r nrow(vri.reduced)`
+* Number of unique forest stand types in the polygon attribute table (ForID): `r length(unique(vri.reduced$ForID))`
+* Number of possible unique forest stand types based on combination of 4 attributes: `r length(unique(mastermatrix$ForID))`
+* Number of forest stand types in the attribute table after subsetting for those forest stands that have attributes of the subset we care about (extracted from mastermatrix): `r length(unique(vri.red$ForID))`
+
+**Conclusion:** both OBJECTID and FEATURE_ID are unique identifiers for rows (polygons) in this file. I want to summarize by forest stand type, over objectid/feature_id.
+
+``` {r}
+vri.mm <- merge(mastermatrix, vri.reduced[c("ForID", "OBJECTID", "polygon_area_cal")], by="ForID", all=T)  # ensure all forest stand types have at least one row associated with them, even if there's no forest in that stand type, and even if it's not one of the 3360 forest types we care about. 
+```
+
+##### Examine duplicates
+
+``` {r, echo=T}
+vri.dup <- vri.red[duplicated(vri.red$OBJECTID),] ## All 
+unique(vri.dup$OBJECTID) 
+```
+
+As of `r format(Sys.Date(), "%B %e, %Y")`, there are `r length(unique(vri.dup$OBJECTID))` duplicated polygon IDs.
+
+### 2. Summarize polygon_area by forest stand ID 
+
+We want the amount of forest in each unique forest stand type. Stand type is "ForID" and forest area is "polygon_area_cal". 
+
+``` {r echo=T}
+myforarea <- aggregate(vri.mm$polygon_area_cal, list(ForID=vri.mm$ForID), FUN=function(x){sum(x, na.rm=T)}) # sum over polygons (objectids) with same forest stand id. 
+kable(rbind(head(myforarea), tail(myforarea)), row.names=F)
+```
+
+**NOTES**
+* `r length(unique(myforarea$ForID))` unique ForIDs in this aggregated dataset
+* only `r length(unique(mastermatrix$ForID))` ForID combinations based on the set of attributes in documentation about the matrix
+
+Some forest stand types weren't ranked because they're not merchantable. If the BecZone and SpeciesGroup combinations were not represented in Kari Stuart-Smith's documentation, I excluded them from further analyses.
+
+Subset for only those forest attributes described in the matrix documentation
+``` {r}
+myforarea <- merge(mastermatrix,myforarea,  by="ForID", all.x=T) # merge to get other 4 stand attributes
+```
+
+``` {r echo=T}
+colnames(myforarea)[ncol(myforarea)] <- "area_Ha"
+
+df.tmp <- myforarea[c("BEC", "SpeciesGroup", "ForAge", "ForHt", "area_Ha")]
+
+kable(df.tmp[1:15,], row.names=F)
+```
+
+Cast out into matrix format (i.e. same format the matrix came in from Kari)
+
+``` {r}
+colnames(df.tmp)[ncol(df.tmp)] <- "value"
+
+mymat <- cast(df.tmp, BEC + SpeciesGroup ~ ForAge + ForHt ) 
+
+kable(mymat[1:2,], row.names=F)
+```
+
+### 3. Load and reformat Barb's area calculations. Rewrite to file
+
+Barb Sobota did some spatial analyses for me in early 2017 because Trish was otherwise occupied and I couldn't do them myself. 
+
+One thing she did was calculate the area of forest per ForID, which I can compare to my areas. 
+
+Unfortunately I forgot to standardize the tree species group codes before sending to her, so I need to do it post-hoc. I created a lookup table to do this standardization 
+
+``` {r echo=T}
+vri.barb <- read.csv("data/VRI_SSCount_ForID.csv", header=T)
+colnames(vri.barb)[1] <- "ForID.VRISp"
+
+barb.mm <- merge(mastermatrix,vri.barb,  by="ForID.VRISp", all.x=T) #  ensure all forest stand types have at least one row associated with them, even if there's no forest in that stand type. Also, eliminate ForIDs we don't want
+
+kable(barb.mm[1:20,], row.names=F)
+```
+
+Cast out into matrix format (i.e. same format the matrix came in from Kari)
+
+``` {r echo=T}
+colnames(barb.mm)[which(colnames(barb.mm)=="TotalAreaHa")] <- "area_Ha"
+df.tmp <- barb.mm[c("BEC", "SpeciesGroup", "ForAge", "ForHt", "area_Ha")]
+
+colnames(df.tmp)[ncol(df.tmp)] <- "value"
+barbmat <- cast(df.tmp, BEC + SpeciesGroup ~ ForAge + ForHt ) # cast into matrix format
+```
+
+### 4. Compare my calculated areas to Barb's
+
+``` {r echo=T}
+colnames(myforarea)[ncol(myforarea)] <- "MyArea"
+colnames(barb.mm)[ncol(barb.mm)] <- "BarbArea"
+
+comparea <- merge(myforarea[c("ForID", "MyArea")], barb.mm[c("ForID", "BarbArea", "ForID.VRISp")], by="ForID")
+comparea$Barbcalc.mycalc.SameArea <- abs(comparea$MyArea - comparea$BarbArea) # compare mine to Barb's 
+comparea <- comparea[order(comparea$Barbcalc.mycalc.SameArea, decreasing=T),]
+```
+
+Let's take a look at these comparisons..
+
+``` {r}
+kable(head(comparea), row.names=F)
+
+kable(tail(comparea), row.names=F)
+```
+
+We see some problems in comparing NA to numeric values. So let's fix that by creating a few index columns. 
+
+``` {r}
+comparea$BNoArea <- is.na(comparea$BarbArea) # Is barb's area evaluated, yes or no?
+comparea$B0Area <- comparea$BarbArea == 0 # is barb's area 0, yes or no?
+
+comparea$MeNoArea <- is.na(comparea$MyArea) # is my area evaluated, yes or no?
+comparea$Me0Area <- comparea$MyArea == 0 # is my area 0, yes or not?
+
+comparea$Barb_noNA <- comparea$BarbArea # create a new column for Barb's area without NAs
+comparea$Barb_noNA[is.na(comparea$Barb_noNA)] <- 0 #replacing NA areas with 0s so I can do remaining calculations
+comparea$mine_noNA <- comparea$MyArea # create a new column for my area without NAs
+comparea$mine_noNA[is.na(comparea$mine_noNA)] <- 0 #replacing NA areas with 0s so I can do remaining calculations
+```
+
+Now compare differences between areas calculated by Barb or msyelf - but omit any rows where Area = NA
+
+``` {r}
+
+comparea$Diff <- abs(comparea$Barb_noNA - comparea$mine_noNA) # absolute diff between barbs and my areas
+comparea$DiffMoreThan.001 <- comparea$Diff > 0.001
+
+write.table(comparea, "Output/ForestAreaCalcCompare-2017.12.csv", row.names=F, col.names=T, sep=",")
+
+```
+
+**NOTES**
+
+* The biggest difference in calculated stand area between Barb's calculations and mine is: `r max(comparea$Diff)`
+* There are `r unique(comparea$DiffMoreThan.001)` stands where the difference in our calculations exceeds 0.001
+
+#### Conclusions
+* Barb's forest stand areas and my forest calculated stand areas are the same.
+* I needed to standardize Barb's forIDs to the standard speciesGroups. 
+* I will use my calculated areas. 
+
+### Write files
+
+``` {r, write.files.from.mycals, echo=T}
+write.table(myforarea[c("ForID", "MyArea")], "data/ForestAreaCalc-long-2017.12.csv", sep=",", col.names=T, row.names=F)
+write.table(mymat, "data/ForestAreaCalc-wide-2017.12.csv", row.names=F, col.names=T, sep=",")  
+```
+
+``` {r, write.files.from.barbcalcs, echo=T}
+write.table(barb.mm[c("ForID", "BarbArea")], "data/ForestAreaCalcBARB-long-2017.12.csv", sep=",", col.names=T, row.names=F)
+
+write.table(barbmat, "data/ForestAreaCalcBARB-wide-2017.12.csv", row.names=F, col.names=T, sep=",")  
+
+```
+
+### OBSOLETE. Compare forest stand areas to the matrix file Forsite sent them. 
+
+I don't do this comparison in this script. In an earlier iteration of these analyses, I found sufficient evidence that the file Forsite sent has the WRONG areas in it. It must have been a preliminary file transferred without sufficient documentation. In any case, I know not to use area_summary_with_matrix for either Rank or Area calculations. 
+
+``` {r echo=T, eval=F}
+myforarea2 <- read.csv("data/COFI.Layer.TableExport/area_summary_with_matrix-AREA-melt.csv", header=T)
+
+myforarea3 <- merge(myforarea2, myforarea, by="ForID", all.y=T)
+myforarea3$Forsitemat.mycalc.SameArea <- myforarea3$ForestArea == myforarea3$area_Ha
+```
