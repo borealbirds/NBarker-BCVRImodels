@@ -1,0 +1,89 @@
+---
+title: "Describe Ranks"
+author: "Nicole Barker"
+date: "Last run: Dec 18, 2017"
+output: 
+  word_document:
+    reference_docx: ../styles/ReportFormat_1.docx
+---
+``` {r setup, echo=F, message=F, warning=F}
+require(knitr)
+opts_knit$set(root.dir = '..')
+```
+
+``` {r load.project, message=F}
+require(ProjectTemplate)
+load.project()
+options(digits=12)
+```
+
+## Background 
+
+The Council of Forest Industries (COFI) has developed a risk management approach for incidental take based on avoidance of operation during the breeding season in forest stands that have high-bird value. The approach assigns a Risk Rank value to each forest stand in the interior of British Columbia based on attributes in the Vegetation Resource Inventory (VRI). The Risk Rank values are meant to represent densities of breeding birds, and are based on the combinations of BEC zone, leading tree species, stand age, and canopy height. This approach is based on expert opinion but has not been validated, and remains an elaborate hypothesis to be tested.
+
+We wish to know whether these ranks are reliable for decision making.
+
+## 1. First, an overview of the ranks
+
+``` {r}
+load("cache/mig_birds_Layer_polyarea_forstandatts.RData")
+vri <- mig_birds_Layer_polyarea_forstandatts; rm(mig_birds_Layer_polyarea_forstandatts)
+
+kable(data.frame(VRI_columnNames=colnames(vri)))
+```
+
+``` {r}
+ggplot(vri, aes(x=Rank)) + geom_bar() + myfacettheme2 + ylab("Count")
+```
+
+Remove stands with 0 rank
+
+``` {r}
+vri.qs <- vri # quicksave
+vri <- vri[vri$Rank %in% 1:6,]
+vri$Rank <- factor(vri$Rank, ordered=T)
+```
+
+Screen out BecZones we don't care about
+``` {r}
+vri.qs <- vri #quicksave
+vri <- vri[vri$BecZone %in% unique(mastermatrix$BEC),]
+vri$BecZone <- factor(vri$BecZone)
+
+```
+
+### Ranks as distributed among BEC Zones
+
+``` {r}
+tbl_ranks_bec <- table(vri$BecZone, vri$Rank)
+kable(tbl_ranks_bec)
+prop_ranks_bec <- prop.table(tbl_ranks_bec) # sum of all values = 1 (i.e. not sum by row/category)
+kable(prop_ranks_bec, digits=4)
+
+prop_ranks_bybec <- prop.table(tbl_ranks_bec, 1) # rowSums = 1
+kable(prop_ranks_bybec, digits=4)
+
+ggplot(vri, aes(x=BecZone, fill=Rank)) + geom_bar(position="dodge") + ylab("Number of Stands") + scale_fill_manual(values=becpal) +myfacettheme3
+
+ggplot(vri, aes(x=BecZone, fill=Rank, order=Rank)) + geom_bar(position="fill") + ylab("Proportion") + myfacettheme3
+
+```
+
+### Ranks as distributed among Species Groups
+
+``` {r}
+tbl_ranks_sg <- table(vri$SpeciesGroup, vri$Rank)
+kable(tbl_ranks_sg)
+prop_ranks_sg <- prop.table(tbl_ranks_sg) # sum of all values = 1 (i.e. not sum by row/category)
+kable(prop_ranks_sg, digits=5)
+
+prop_ranks_bysg <- prop.table(tbl_ranks_sg, 1) # rowSums = 1
+kable(prop_ranks_bysg, digits=5)
+
+ggplot(vri, aes(x=SpeciesGroup, fill=Rank)) + geom_bar(position="dodge") + ylab("Number of Stands") + scale_fill_manual(values=sgpal) +myfacettheme4
+
+ggplot(vri, aes(x=BecZone, fill=Rank, order=Rank)) + geom_bar(position="fill") + ylab("Proportion") + myfacettheme3
+
+``` 
+
+

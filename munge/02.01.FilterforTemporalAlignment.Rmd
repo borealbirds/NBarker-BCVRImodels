@@ -1,0 +1,136 @@
+---
+title: "Filter for temporal alignment"
+author: "Nicole Barker"
+date: "Last run: Dec 18, 2017"
+output: 
+  word_document:
+    reference_docx: ../styles/ReportFormat_1.docx
+---
+``` {r setup, echo=F, message=F, warning=F}
+require(knitr)
+opts_knit$set(root.dir = '..')
+```
+
+``` {r load.project, message=F}
+require(ProjectTemplate)
+load.project()
+options(digits=12)
+```
+
+
+## Background
+Bird data were collected any time between 1991 and the early 2010s. The VRI shapefile is from 2014. But we don't know when the photos were taken, or whether the time-dependent attributes were projected. 
+
+There are plenty of opportunities for the bird data to be mis-matched with the forest attributes in the VRI data. 
+
+In this script: 
+
+* I explore the various date fields in the VRI dataset to determine how to calculate temporal alignment
+* I calculate temporal alignment
+* I filter out point counts I don't trust b/c of mis-alignment with VRI attributes
+
+### Possible dates to consider
+
+* **input_date**: The date the forest cover information was entered into the Provincial Data Base.
+* **interpretation_date**: The date on which the polygon estimates were photo interpreted.
+* **attribution_base_date**: The date that the information about this polygon is considered to be based on. It is currently populated, however, it is ADVISABLE to use REFERENCE DATE attribute. (from VRI Relational Data Dictionary)
+* **reference_date**: The date of the source data on which the interpretation is based. Known as the 'Reference Year' in the VIF file. In the VRI this is calculated from the year of the photo or source survey that was used to generate the VRI attribute.
+* **projected_date**: The date to which time dependent stand information is projected. Used to determine the date to which time dependent variables in the stand have been projected. Attributes that are projected to a future date include: -Age, Age Class, Height, Height Class, Type Identity, Stocking Class, All maps within a project area should be projected to the same date.
+* **earliest_nonlogging_dist_date**: Represents the polygons earliest non-logging disturbance date.
+* **harvest_date**: The date in which the polygon was last harvested.
+
+##### Look at the various dates
+
+``` {r}
+vri_intersect <- read.csv("data/birdVRIintersect_preprocess1.csv", header=T)
+vri_intersect$INPUT_DATE <- unlist(lapply(strsplit(as.character(vri_intersect$INPUT_DATE), " "), function(x) {x[1]}))
+vri_intersect$INTERPRETATION_DATE <- unlist(lapply(strsplit(as.character(vri_intersect$INTERPRETATION_DATE), " "), function(x) {x[1]}))
+vri_intersect$ATTRIBUTION_BASE_DATE <- unlist(lapply(strsplit(as.character(vri_intersect$ATTRIBUTION_BASE_DATE), " "), function(x) {x[1]}))
+vri_intersect$REFERENCE_DATE <- unlist(lapply(strsplit(as.character(vri_intersect$REFERENCE_DATE), " "), function(x) {x[1]}))
+vri_intersect$PROJECTED_DATE <- unlist(lapply(strsplit(as.character(vri_intersect$PROJECTED_DATE), " "), function(x) {x[1]}))
+vri_intersect$EARLIEST_NONLOGGING_DIST_DATE <- unlist(lapply(strsplit(as.character(vri_intersect$EARLIEST_NONLOGGING_DIST_DATE), " "), function(x) {x[1]}))
+vri_intersect$HARVEST_DATE <- unlist(lapply(strsplit(as.character(vri_intersect$HARVEST_DATE), " "), function(x) {x[1]}))
+vri_intersect$REFERENCE_YEAR <- unlist(lapply(strsplit(as.character(vri_intersect$REFERENCE_YEAR), " "), function(x) {x[1]}))
+vri_intersect$Disturbance_date_calculated <- apply(vri_intersect[c("EARLIEST_NONLOGGING_DIST_DATE", "HARVEST_DATE")], MARGIN=1, FUN=function(x) {max(x, na.rm=T)})  
+
+vri_dates <- vri_intersect[c(grep(c("DATE"), colnames(vri_intersect)), grep(c("YEAR"), colnames(vri_intersect)), which(colnames(vri_intersect) %in% c("PROJ_AGE_1", "VRIintersectLayer")))]
+
+vri_dates <- vri_dates[-which(colnames(vri_dates) %in% c("INPUT_DATE", "ATTRIBUTION_BASE_DATE"))]
+vri_dates <- vri_dates[order(vri_dates$VRIintersectLayer, vri_dates$PROJ_AGE_1),]
+
+write.table(vri_dates, file="data/VRI_date_QC.csv", sep=",", row.names=F, col.names=T)
+
+vri_dates_sample <- vri_dates[sample(1:nrow(vri_dates), 50),]
+
+kable(vri_dates_sample, row.names=F)
+```
+
+
+**NOTES**
+
+* PROJ_AGE_1 doesn't always correspond to difference between projected date and 
+
+
+
+
+
+We make the assumption that the VRI file accurately describes the forest as of 2014*. There are a few ways the forest description may not accurately reflect what was on the ground when the birds were surveyed. 
+
+* **Mis-alignment type 1**. The point count survey conducted before a disturbance. Big problem because we have no idea what the forest conditions were like when the birds were sampled. We need to cut these points. They're indicated when `(VRI date - date of point count)` is negative. 
+
+* **Mis-alignment type 2**. Point count survey was conducted many years ago, and the forest has aged since then. The 2014 VRI shapefile will reflect an older forest than the birds experienced during the bird survey. This is potentially a smaller problem. 
+
+This doesn't even factor in the possibility that the data were not accurate as of 2014. 
+
+
+## How to determine if the VRI and point count data are temporally mis-aligned?
+
+* How old is forest stand?
+* How long ago was the point count conducted?
+
+``` {r, eval=F}
+rstands$HowLongPC <- 2014-rstands$YYYY
+colnames(rstands)[which(colnames(rstands)=="PROJ_AGE_1")] <- "HowOldForest"
+rstands$DiffPCandForAge <- rstands$HowOldForest - rstands$HowLongPC
+rstands$ForYoungerThanPC <- rstands$DiffPCandForAge < 0
+``` 
+
+### Misalignment Type 1. For how many sampling events are forest stands younger than the point count data?
+``` {r, eval=F}
+hist(as.numeric(rstands$ForYoungerThanPC), col="blue", main=NULL, xlab="Number of Mis-aligned Stands", breaks=2)
+rstands.print <- rstands[c("FEATURE_ID", "HowOldForest", "HowLongPC", "DiffPCandForAge", "ForYoungerThanPC")]
+
+
+Based on best available information, `r sum(as.numeric(rstands$ForYoungerThanPC))` of `r nrow(rstands)` sampling events (`r round(100*(sum(as.numeric(rstands$ForYoungerThanPC) / nrow(rstands))), 2)` %) were conducted before a disturbance. 
+
+`r kable(sample_n(rstands.print, 20), caption="Random 20 rows of ranked stands highlighting differences between projected forest age and when the point count survey in that stand was conducted", row.names=F)`
+
+
+#``` {r write.table, eval=F}
+write.table(rstands, file="data/BirdDataTemporalAlignment.csv", sep=",", row.names=F, col.names=T)
+```
+
+#### Now that we know which forest stands / point counts are potentially problematic, we can either:
+
+* Exclude the problematic samples / stands from the analyses
+* Update the VRI shapefile to have historically correct data based on pre-disturbance forest stand structure and then include those in the analysis
+
+To decide which path to take, we should evaluate how representation changes if we exclude all temporally misaligned point counts. 
+
+
+### Misalignment Type 2. What is the discrepancy between VRI attributes and bird point count data?
+
+``` {r, eval=F}
+rstands.non0 <- rstands[rstands$ForYoungerThanPC == FALSE,]
+
+
+####`r paste("Difference between point count (", min(rstands.non0$YYYY), "-", max(rstands.non0$YYYY),") and VRI (2014) data", sep="")`
+
+#``` {r, eval=F}
+hist(as.numeric(rstands.non0$HowLongPC), col="blue", main=NULL, xlab="No. of Years", breaks=15, ylab="No. Point Count Surveys")
+```
+
+What to do about these data? 
+
+* Age: Could be re-calculated based on "projected age" field in VRI dataset. Subtract the age of the point count data to get a new approximation of forest age. 
+* Height: ??? I don't know how age is projected, but presumably we could back-project from projected height. Or maybe we can re-project based on the base year used to generate the existing projected height. 

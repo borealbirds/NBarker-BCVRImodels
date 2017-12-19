@@ -338,7 +338,7 @@ ranks[ranks$KariMatrix.Rank == "unranked" & ranks$sameranks.VRI.KariMat == FALSE
 ranks[ranks$VRI.Rank == "unranked" & ranks$sameranks.VRI.KariMat == FALSE,]$FinalRank <- ranks$KariMatrix.Rank[ranks$VRI.Rank == "unranked" & ranks$sameranks.VRI.KariMat == FALSE]
 ```
 
-`r nrow(ranks[is.na(ranks$FinalRank),])` ForID are left to fill in. However, I still want to remove ranks for thsoe  stands with no forested area.
+`r nrow(ranks[is.na(ranks$FinalRank),])` ForID are left to fill in. However, I still want to remove ranks for those  stands with no forested area.
 
 ##### If the forest area is 0 for a given ForID, then the final rank is Unranked
 ``` {r}
