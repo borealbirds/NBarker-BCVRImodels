@@ -1,0 +1,448 @@
+---
+title: "Describe Ranks"
+author: "Nicole Barker"
+date: "Last run: Dec 19, 2017"
+output: 
+  word_document:
+    reference_docx: ../styles/ReportFormat_1.docx
+---
+
+``` {r setup, echo=F, message=F, warning=F}
+require(knitr)
+opts_knit$set(root.dir = '..')
+knitr::opts_chunk$set(
+  fig.path = "figures/"
+)
+```
+
+``` {r load.project, message=F}
+require(ProjectTemplate)
+load.project()
+options(digits=12)
+```
+
+## Background 
+
+The Council of Forest Industries (COFI) has developed a risk management approach for incidental take based on avoidance of operation during the breeding season in forest stands that have high-bird value. The approach assigns a Risk Rank value to each forest stand in the interior of British Columbia based on attributes in the Vegetation Resource Inventory (VRI). The Risk Rank values are meant to represent densities of breeding birds, and are based on the combinations of BEC zone, leading tree species, stand age, and canopy height. This approach is based on expert opinion but has not been validated, and remains an elaborate hypothesis to be tested.
+
+We wish to know whether these ranks are reliable for decision making.
+
+## 1. First, an overview of the ranks
+
+``` {r}
+vri <- read.csv("data/FORSITE_all_regions__Nicoles_VRI_fields_fixednames-zSpGroup.csv", header=T)
+colnames(vri)[which(colnames(vri) %in% "code_use")] <- "SpeciesGroup"
+vri$ForID <- with(vri, paste(BecZone, SpeciesGroup, Age, Height, sep="."))
+
+kable(data.frame(VRI_columnNames=colnames(vri)))
+```
+
+**NOTES**
+
+* the VRI shapefile has `r nrow(vri)` rows (i.e., polygons). Each polygon is assumed to represent a stand, for simplicity's sake. 
+
+### Eliminated unwanted data
+
+Eliminate unranked stands, which is anything other than 1 through 6
+
+``` {r}
+vri <- vri[vri$Rank %in% 1:6,]
+vri$Rank <- factor(vri$Rank, ordered=T)
+```
+
+Restrict only to the Set of Attributes I care about
+
+``` {r}
+vri <- vri[vri$ForID %in% mastermatrix$ForID,]
+```
+
+**NOTES**
+
+* Now the VRI shapefile has `r nrow(vri)` rows (i.e., polygons). Each polygon is assumed to represent a stand, for simplicity's sake. 
+
+### Distribution of Ranks across BC
+
+How are the ranks distributed across the interior of BC? i.e., how many stands are there of each rank?
+
+``` {r}
+ggplot(vri, aes(x=Rank, fill=Rank)) + geom_bar() + myfacettheme3 + ylab("Number of Stands") + scale_fill_manual(values=palrank)
+```
+
+Most stands are intermediate ranks, 2-5. Some are 1. Very few are 6. 
+
+
+### Distribution of ranks across forest attributer
+
+How do the ranks correspond to BEC zone, species group, age, and height?
+
+##### Reduce VRI file to the lookup table of one row per stand type
+
+Since there are over 3 million polygons (stands) in the VRI file, we will see multiple forest stands with the same forest attributes and rank. To understand how ranks relate to forest attributes, we want a table of one row for each unique stand type. Then we can use the resultant table to tell us how Ranks are distributed among other forest attributes. 
+
+``` {r}
+stand_ranks <- vri[c("ForID", "Rank")]
+stand_ranks <- stand_ranks[!duplicated(stand_ranks$ForID),]
+```
+
+Now we have a table of all forest stands that have one of the following values for Rank `r sort(unique(stand_ranks$Rank))`
+
+##### Combine above table of ranks with complete exhaustive table of possible ForIDs (including unranked)
+
+Not all stand types were ranked, either because they don't exist or because they were very rare (e.g., < 50 ha on the ground). But for the sake of completeness, here I'm creating a table with all theoretically possible ForIDs based on the various forest stand attributes that were used to rank stands. 
+
+Merge mastermatrix with ranked stands and order the factor levels
+
+``` {r}
+stand_rank_lookup <- merge(mastermatrix, stand_ranks, by="ForID", all.x=T)
+```
+
+#### Add factor labels
+``` {r}
+stand_rank_lookup$BecZone <- factor(stand_rank_lookup$BecZone)
+stand_rank_lookup$BecZone <- factor(stand_rank_lookup$BecZone, levels=levels(stand_rank_lookup$BecZone), labels=c("BG/PP", "BWBS", "ESSF", "ICH/MH", "IDF", "MS", "SBS/SBPS", "SWB"))
+stand_rank_lookup$SpeciesGroup <- factor(stand_rank_lookup$SpeciesGroup)
+levels(stand_rank_lookup$Age) <- c("3-30 yrs", "31-80 yrs", "81-120 yrs", "121-250 yrs", ">250 yrs")
+levels(stand_rank_lookup$Height) <- c("<10.5 m", "10.5-19.4 m", "19.5-28.4 m", "> 28.5 m")
+```
+
+Now we have `r length(unique(stand_rank_lookup$ForID))` unique Forest Stand IDs. `r nrow(stand_rank_lookup[!is.na(stand_rank_lookup$Rank),])` of these stand types/IDs are ranked. 
+
+#### Create second and third tables for ease of plotting
+``` {r}
+stand_rank_lookup.qs <- stand_rank_lookup
+standranks_noNA <- stand_rank_lookup[!is.na(stand_rank_lookup$Rank),]
+standranks.factor <- stand_rank_lookup
+standranks.factor$Rank <- factor(standranks.factor$Rank)
+standranks.factor.noNA <- standranks.factor[!is.na(standranks.factor$Rank),]
+```
+
+
+
+
+
+``` {r}
+ggplot(stand_ranks, aes(x=Rank, fill=Rank)) + geom_bar() + myfacettheme3 + ylab("Number of Stand Types") + scale_fill_manual(values=palrank)
+```
+
+### Ranks as distributed among BEC Zones
+``` {r}
+tbl_ranks_bec <- table(vri$BecZone, vri$Rank)
+kable(tbl_ranks_bec)
+prop_ranks_bec <- prop.table(tbl_ranks_bec) # sum of all values = 1 (i.e. not sum by row/category)
+kable(prop_ranks_bec, digits=4)
+
+prop_ranks_bybec <- prop.table(tbl_ranks_bec, 1) # rowSums = 1
+kable(prop_ranks_bybec, digits=4)
+
+ggplot(vri, aes(x=BecZone, fill=Rank)) + geom_bar(position="dodge") + ylab("Number of Stands") + scale_fill_manual(values=palrank) +myfacettheme3
+
+ggplot(vri, aes(x=BecZone, fill=Rank, order=Rank)) + geom_bar(position="fill") + ylab("Proportion") + myfacettheme3
+
+```
+
+### Ranks as distributed among Species Groups
+
+``` {r}
+tbl_ranks_sg <- table(vri$SpeciesGroup, vri$Rank)
+kable(tbl_ranks_sg)
+prop_ranks_sg <- prop.table(tbl_ranks_sg) # sum of all values = 1 (i.e. not sum by row/category)
+kable(prop_ranks_sg, digits=5)
+
+prop_ranks_bysg <- prop.table(tbl_ranks_sg, 1) # rowSums = 1
+kable(prop_ranks_bysg, digits=5)
+
+ggplot(vri, aes(x=SpeciesGroup, fill=Rank)) + geom_bar(position="dodge") + ylab("Number of Stands") + scale_fill_manual(values=sgpal) +myfacettheme4
+
+ggplot(vri, aes(x=BecZone, fill=Rank, order=Rank)) + geom_bar(position="fill") + ylab("Proportion") + myfacettheme3
+
+``` 
+
+
+===================
+
+### Combine above table of ranks with complete exhaustive table of possible ForIDs (including unranked)
+Not all stand types were ranked, either because they don't exist or because they were very rare (e.g., < 50 ha on the ground). But for the sake of completeness, here I'm creating a table with all theoretically possible ForIDs based on the various forest stand attributes that were used to rank stands. 
+``` {r}
+mastermatrix <- expand.grid(BecZone=unique(vri_16$BecZone), SpeciesGroup=unique(vri_16$SpeciesGroup), Age=unique(vri_16$Age), Height=unique(vri_16$Height))
+mastermatrix$ForID <- with(mastermatrix, paste(BecZone, SpeciesGroup, Age, Height, sep="."))
+mastermatrix <- mastermatrix[order(mastermatrix$ForID),c("ForID", "BecZone", "SpeciesGroup", "Age", "Height")]
+kable(head(mastermatrix, 10), row.names=F)
+```
+
+*Eliminate the forest stand types that we don't really want*
+
+* Thsoe missing values for one of the 4 stand attributes - Keyed as either "0" or "999"
+* Those in BecZones BAFA_IMA or CWH
+
+``` {r}
+mastermatrix <- mastermatrix[!mastermatrix$BecZone %in% "0",]
+mastermatrix <- mastermatrix[!mastermatrix$SpeciesGroup %in% "0",]
+mastermatrix <- mastermatrix[!mastermatrix$SpeciesGroup %in% "999",]
+mastermatrix <- mastermatrix[!mastermatrix$Age %in% "0",]
+mastermatrix <- mastermatrix[!mastermatrix$Height == "0",]
+mastermatrix <- mastermatrix[!mastermatrix$BecZone %in% c("BAFA_IMA", "CWH"),]
+```
+
+#### merge mastermatrix with ranked stands
+``` {r}
+stand_rank_lookup <- merge(mastermatrix, stand_ranks, by="ForID", all.x=T)
+stand_rank_lookup$Age <- factor(stand_rank_lookup$Age)
+stand_rank_lookup$Age <- factor(stand_rank_lookup$Age, ordered=T, levels=levels(stand_rank_lookup$Age)[c(3,4,5,1,2)])
+stand_rank_lookup$Height <- factor(stand_rank_lookup$Height, ordered=T, levels=c("1", "2", "3", "4+"))
+stand_rank_lookup$BecZone <- factor(stand_rank_lookup$BecZone)
+stand_rank_lookup$BecZone <- factor(stand_rank_lookup$BecZone, levels=levels(stand_rank_lookup$BecZone), labels=c("BG/PP", "BWBS", "ESSF", "ICH/MH", "IDF", "MS", "SBS/SBPS", "SWB"))
+stand_rank_lookup$SpeciesGroup <- factor(stand_rank_lookup$SpeciesGroup)
+```
+
+Now we have `r nrow(mastermatrix)` unique Forest Stand IDs. `r nrow(stand_rank_lookup[!is.na(stand_rank_lookup$Rank),])` of these stand types/IDs are ranked. 
+
+#### Add factor labels
+``` {r}
+levels(stand_rank_lookup$Age) <- c("3-30 yrs", "31-80 yrs", "81-120 yrs", "121-250 yrs", ">250 yrs")
+levels(stand_rank_lookup$Height) <- c("<10.5 m", "10.5-19.4 m", "19.5-28.4 m", "> 28.5 m")
+```
+
+#### Create second and third tables for ease of plotting
+``` {r}
+srlnona <- stand_rank_lookup[!is.na(stand_rank_lookup$Rank),]
+srlfac <- stand_rank_lookup
+srlfac$Rank <- factor(srlfac$Rank)
+srlfacnona <- srlfac[!is.na(srlfac$Rank),]
+```
+
+# Plot relationships between Ranks and stand attributes 
+
+## 1. BecZones
+
+#### Get an overall idea of the distribution of ranks among BEC Zones
+
+``` {r, Fig.Rank_BEC1, fig.height=5, fig.width=5, dpi=150}
+ggplot(srlnona, aes(x=BecZone, y=Rank)) + geom_jitter(alpha=0.5,  position=position_jitter(height=0.1, width=0.2)) + myfacettheme2 + ylab("Stand Rank") + scale_fill_brewer(palette="Purples", guide=FALSE)
+```
+
+####Understand how ranks are distributed among BEC Zones
+
+Preprocessing: Reshape table to include 0 counts
+
+``` {r}
+tmpdat <- dcast(stand_rank_lookup, Rank ~ BecZone, fun.aggregate=length, value.var="Rank")
+rank_counts_bec <- melt(tmpdat, id.vars="Rank")
+colnames(rank_counts_bec) <- c("Rank", "BecZone", "NumberStandTypes")
+rm(tmpdat)
+```
+
+``` {r, Fig.Rank_Bec2, fig.height=5, fig.width=5, dpi=150}
+ggplot(stand_rank_lookup, aes(x=Rank, fill=BecZone)) + geom_histogram(bins=6, col="black") + scale_x_continuous(labels=c(1:6), breaks=1:6) + ylab("Number of Stand Types") + scale_fill_manual(values=palbec, name = "BEC Zone") + myfacettheme3 + xlab("Stand Rank")
+``` 
+
+``` {r, Fig.Rank_Bec3, fig.height=10, fig.height=6, dpi=150}
+ggplot(stand_rank_lookup, aes(x=Rank, fill=BecZone)) + geom_histogram(aes(y=..density..), bins=6, col="black") + facet_wrap(~BecZone, ncol=2) + myfacettheme2 + scale_x_continuous(labels=c(1:6), breaks=1:6) + ylab("Proportion of Stand Types") + scale_fill_manual(values=palbec, guide=FALSE) + xlab("Stand Rank")
+```
+
+``` {r, Fig.Rank_Bec4, fig.height=6, fig.width=9, dpi=200}
+ggplot(rank_counts_bec, aes(x=Rank, y=NumberStandTypes, fill=BecZone)) + geom_bar(stat="identity", position=position_dodge(width=0.8), width=0.8, col="black") + scale_fill_manual(values=palbec, name="BEC Zone", guide=FALSE) + scale_x_continuous(labels=c(1:6), breaks=1:6) +ylab("Number of Stand Types") + myfacettheme3 + geom_text(aes(label=BecZone), position=position_dodge(width=0.8), vjust=0.4, hjust=-0.1, angle=90, size=3) + xlab("Stand Rank") + ylim(0, 90)
+```
+
+
+## 2. SpeciesGroups
+
+*Get an overall idea of the distribution of ranks among Tree Species Groups*
+
+``` {r, Fig.Rank_SPGrp1, fig.height=3, fig.width=7, dpi=150}
+ggplot(srlnona, aes(x=SpeciesGroup, y=Rank, col=SpeciesGroup)) + geom_jitter(alpha=0.5, position=position_jitter(height=0.1, width=0.2)) + myfacettheme1 + scale_y_continuous(labels=c(1:6), breaks=1:6) + scale_color_manual(values=palsg, guide=FALSE) + ylab("Stand Rank") + xlab("Dominant Tree Species")
+
+ggplot(srlnona, aes(x=SpeciesGroup, y=Rank)) + geom_jitter(alpha=0.5, position=position_jitter(height=0.05, width=0.2)) + myfacettheme1 + scale_y_continuous(labels=c(1:6), breaks=1:6) + ylab("Stand Rank") + xlab("Dominant Tree Species")
+```
+
+*Understand how ranks are distributed among Species Groups*
+To account for any species groups that have no stands for a given rank. 
+
+``` {r}
+tmpdat <- dcast(stand_rank_lookup, Rank ~ SpeciesGroup, fun.aggregate=length, value.var="Rank")
+rank_counts_spgrp <- melt(tmpdat, id.vars="Rank")
+colnames(rank_counts_spgrp) <- c("Rank", "SpeciesGroup", "NumberStandTypes")
+rm(tmpdat)
+```
+
+``` {r, Fig.Rank_SPGrp2, fig.height=7, fig.width=6}
+ggplot(stand_rank_lookup, aes(x=Rank, fill=SpeciesGroup)) + geom_histogram(bins=6, col="black") + myfacettheme3 + scale_fill_manual(values=palsg, name="Dominant Tree Species") + scale_x_continuous(labels=c(1:6), breaks=1:6) + ylab("Number of Stand Types") + guides(fill=guide_legend(ncol=1)) + xlab("Stand Rank")
+```
+
+``` {r, Fig.Rank_SPGrp3, fig.height=6, fig.width=10, depi=200}
+ggplot(rank_counts_spgrp, aes(x=Rank, y=NumberStandTypes, fill=SpeciesGroup)) + geom_bar(stat="identity", position=position_dodge(width=0.8), width=0.8, col="black")   + myfacettheme2 + scale_fill_manual(values=palsg, name="Dominant Tree Species") + scale_x_continuous(labels=c(1:6), breaks=1:6) + ylim(0,50) + ylab("Number of Stand Types") + xlab("Stand Rank") + guides(fill=guide_legend(ncol=6))
+```
+
+``` {r, Fig.Rank_SPGrp4, fig.height=10, fig.width=7, dpi=150}
+ggplot(stand_rank_lookup, aes(x=Rank, fill=SpeciesGroup)) + geom_histogram(aes(y=..density..), bins=6, col="black") + facet_wrap(~SpeciesGroup, ncol=3) + myfacettheme2 + scale_fill_manual(values=palsg, guide=FALSE) + scale_x_continuous(labels=c(1:6), breaks=1:6) + ylab("Proportion of Stand Types") + xlab("Stand Rank") 
+```
+
+## 3. Species groups by BEC Zone
+*Get an overall idea of the distribution of ranks among Tree Species Groups within the different Bec Zones*
+
+``` {r, Fig.Rank_BECSPGrp1, fig.height=8, fig.width=5, dpi=150}
+ggplot(srlnona, aes(x=SpeciesGroup, y=Rank, col=SpeciesGroup)) + geom_jitter(alpha=0.5, position=position_jitter(height=0.1, width=0.1)) + myfacettheme4 + facet_wrap(~BecZone, ncol=1) + scale_color_manual(values=palsg, guide=FALSE)+ scale_y_continuous(labels=c(1:6), breaks=1:6)  + ylab("Stand Rank") + xlab("Dominant Tree Species")
+```
+
+*Understand how ranks are distributed among Species Groups in the different BEC Zones*
+
+``` {r}
+tmpdat <- dcast(stand_rank_lookup, BecZone + SpeciesGroup ~ Rank, fun.aggregate=length, value.var="Rank")
+rank_counts_becspgrp <- melt(tmpdat, id.vars=c("SpeciesGroup", "BecZone"))
+colnames(rank_counts_becspgrp) <- c("SpeciesGroup", "BecZone", "Rank", "NumberStandTypes")
+rank_counts_becspgrp <- rank_counts_becspgrp[!rank_counts_becspgrp$Rank %in% "NA",]
+rm(tmpdat)
+```
+
+``` {r, Fig.Rank_BECSPGrp2, fig.height=10, fig.width=10, dpi=200}
+ggplot(stand_rank_lookup, aes(x=Rank, fill=SpeciesGroup)) + geom_histogram(bins=6, col="black") + myfacettheme3 + scale_fill_manual(values=palsg, name="Dominant Tree Species") + facet_wrap(~BecZone, ncol=2) + scale_x_continuous(labels=c(1:6), breaks=1:6) + ylab("Number of Stand Types") + guides(fill=guide_legend(ncol=1)) + xlab("Stand Rank")
+```
+
+``` {r, Fig.Rank_BECspgrp3, fig.height=10, fig.width=7, dpi=200}
+ggplot(rank_counts_becspgrp, aes(x=Rank, y=NumberStandTypes, fill=SpeciesGroup)) + geom_bar(stat="identity", col="black", position=position_dodge(width=0.8), width=0.8) + myfacettheme2 + scale_fill_manual(values=palsg, name="Dominant Tree Species") + facet_wrap(~BecZone, ncol=1) + ylab("Number of Stand types") + ylim(0,12) + guides(fill=guide_legend(ncol=7)) + geom_text(aes(label=SpeciesGroup), position=position_dodge(width=0.8), vjust=0.4, hjust=-0.1, angle=90, size=1) + xlab("Stand Rank")
+
+ggplot(rank_counts_becspgrp, aes(x=BecZone, y=NumberStandTypes, fill=SpeciesGroup)) + geom_bar(stat="identity", position=position_dodge(width=0.8), width=0.8, col="black") + ylim(0,11) + myfacettheme2 + scale_fill_manual(values=palsg, name="Dominant Tree Species") + facet_wrap(~Rank, ncol=1) + ylab("Number of Stand Types")+ guides(fill=guide_legend(ncol=7)) + xlab("BEC Zone") 
+```
+
+``` {r, Fig.Rank_BECSpgrp3, fig.height = 11, fig.width=8.5, dpi=300}
+ggplot(rank_counts_becspgrp, aes(x=SpeciesGroup, y=NumberStandTypes, fill=BecZone)) + geom_bar(stat="identity", col="black", position=position_dodge(width=0.8), width=0.8) + ylim(0,12) + myfacettheme1 + scale_fill_manual(values=palbec, name="BEC Zone") + facet_wrap(~Rank, ncol=1) + ylab("Number of Stand Types") + xlab("Dominant Tree Species")
+
+ggplot(rank_counts_becspgrp, aes(x=SpeciesGroup, y=NumberStandTypes, fill=Rank)) + geom_bar(stat="identity", position=position_dodge(width=0.8), width=0.8) + ylim(0,12) + myfacettheme4 +  facet_wrap(~BecZone, ncol=1) + ylab("Number of Stand Types") + scale_fill_manual(values=palrank, guide=FALSE) + geom_text(aes(label=Rank), position=position_dodge(width=0.8), vjust=-0.3, hjust=0.3, angle=0, size=2) + xlab("Dominant Tree Species")
+
+ggplot(rank_counts_becspgrp, aes(x=SpeciesGroup, y=NumberStandTypes, fill=Rank)) + geom_bar(stat="identity", position=position_dodge(width=0.8), width=0.8) + ylim(0,12) + myfacettheme1 +  facet_wrap(~BecZone, ncol=1) + ylab("Number of Stand Types") + scale_fill_manual(values=palrank, name="Stand Rank") +  xlab("Dominant Tree Species") + guides(fill=guide_legend(ncol=6))
+```
+
+## 4. Age
+
+#### Get an overall idea of the distribution of ranks among forest stand age classes
+
+``` {r, Fig.Rank_age1, fig.height=3, fig.width=3, dpi=150}
+ggplot(srlnona, aes(x=Age, y=Rank)) + geom_jitter(alpha=0.5,  position=position_jitter(height=0.1, width=0.2)) + myfacettheme2 + scale_y_continuous(breaks=c(1:6), labels=c(1:6)) + ylab("Stand Rank") + scale_fill_brewer(palette="Purples", guide=FALSE) + xlab("Stand Age")
+```
+
+####Understand how ranks are distributed among forest age classes
+
+Preprocessing: Reshape table to include 0 counts
+
+``` {r}
+tmpdat <- dcast(stand_rank_lookup, Rank ~ Age, fun.aggregate=length, value.var="Rank")
+rank_counts_age <- melt(tmpdat, id.vars="Rank")
+colnames(rank_counts_age) <- c("Rank", "Age", "NumberStandTypes")
+rank_counts_age <- rank_counts_age[!is.na(rank_counts_age$Rank),]
+```
+
+``` {r, Fig.Rank_age2, fig.height=5, fig.width=5, dpi=150}
+ggplot(stand_rank_lookup, aes(x=Rank, fill=Age)) + geom_histogram(bins=6, col="black") + scale_x_continuous(labels=c(1:6), breaks=1:6) + ylab("Number of Stand Types") + scale_fill_brewer(palette="YlOrRd", name = "Age Class") + myfacettheme3 + xlab("Stand Rank")
+``` 
+
+``` {r, Fig.Rank_age3, fig.height=8, width=4, dpi=150}
+ggplot(stand_rank_lookup, aes(x=Rank, fill=Age)) + geom_histogram(aes(y=..density..), bins=6, col="black") + facet_wrap(~Age, ncol=1) + myfacettheme2 + scale_x_continuous(labels=c(1:6), breaks=1:6) + ylab("Proportion of Stand Types") + scale_fill_brewer(palette="YlOrRd", guide=FALSE) + xlab("Stand Rank")
+```
+
+``` {r, Fig.Rank_age4, fig.height=6, fig.width=9, dpi=200}
+ggplot(rank_counts_age, aes(x=Rank, y=NumberStandTypes, fill=Age)) + geom_bar(stat="identity", position=position_dodge(width=0.8), width=0.8, col="black") +  scale_fill_brewer(palette="YlOrRd", name="Age Class", guide=FALSE) + scale_x_continuous(labels=c(1:6), breaks=1:6) +ylab("Number of Stand Types") + myfacettheme3 + geom_text(aes(label=Age), position=position_dodge(width=0.8), vjust=0.4, hjust=-0.1, angle=90, size=3) + ylim(0,140) + xlab("Stand Rank")
+```
+
+
+## 5. Height
+
+*Get an overall idea of the distribution of ranks among forest height classes*
+
+``` {r, Fig.Rank_height1, fig.height=5, fig.width=7, dpi=150}
+ggplot(stand_rank_lookup, aes(x=Height, y=Rank)) + geom_jitter(alpha=0.5, position=position_jitter(height=0.1, width=0.2)) + myfacettheme1 + scale_y_continuous(labels=c(1:6), breaks=1:6) +  ylab("Stand Rank") + xlab("Height Class")
+```
+
+*Understand how ranks are distributed among forest height classes*
+To account for any species groups that have no stands for a given rank. 
+
+``` {r}
+tmpdat <- dcast(stand_rank_lookup, Rank ~ Height, fun.aggregate=length, value.var="Rank")
+rank_counts_height <- melt(tmpdat, id.vars="Rank")
+colnames(rank_counts_height) <- c("Rank", "Height", "NumberStandTypes")
+rank_counts_height <- rank_counts_height[!is.na(rank_counts_height$Rank),]
+```
+
+``` {r, Fig.Rank_height2, fig.height=5, fig.width=8}
+ggplot(stand_rank_lookup, aes(x=Rank, fill=Height)) + geom_histogram(bins=6, col="black") + myfacettheme2 + scale_fill_manual(values=palht(4), name="Height Class") + scale_x_continuous(labels=c(1:6), breaks=1:6) + ylab("Number of Stand Types") + xlab("Stand Rank")
+
+ggplot(rank_counts_height, aes(x=Rank, y=NumberStandTypes, fill=Height)) + geom_bar(stat="identity", position=position_dodge(width=0.8), width=0.8, col="black")   + myfacettheme2 + scale_fill_manual(values=palht(4), name="Height Class") + scale_x_continuous(labels=c(1:6), breaks=1:6)  + ylab("Number of Stand Types") + geom_text(aes(label=Height), position=position_dodge(width=0.8), vjust=0.2, hjust=-0.1, angle=90, size=3) + xlab("Stand Rank")
+```
+
+``` {r, Fig.Rank_height3, fig.height=10, fig.width=7}
+ggplot(stand_rank_lookup, aes(x=Rank, fill=Height)) + geom_histogram(aes(y=..density..), bins=6, col="black") + facet_wrap(~Height, ncol=1) + myfacettheme2 + scale_x_continuous(labels=c(1:6), breaks=1:6) + ylab("Proportion of Stand Types") + scale_fill_manual(values=palht(4), guide=FALSE) + xlab("Stand Rank")
+```
+
+## 6. Height by Age
+*Get an overall idea of the distribution of ranks among height classes for given age classes*
+
+``` {r, Fig.Rank_ageht1, fig.height=6, fig.width=4, dpi=150}
+ggplot(srlnona, aes(x=Height, y=Rank, col=Age)) + geom_jitter(alpha=0.2, position=position_jitter(height=0.2, width=0.2)) + myfacettheme4 + scale_y_continuous(labels=c(1:6), breaks=1:6) + guides(col=guide_legend(ncol=1)) + ylab("Stand Rank") + xlab("Height Class") + scale_color_brewer(palette="YlOrRd", name = "Age Class")
+
+ggplot(srlfacnona, aes(x=Height, y=Rank, fill=Rank)) + geom_jitter(shape=21, alpha=0.5,col="black", position=position_jitter(height=0.1, width=0.1)) + myfacettheme4 + facet_wrap(~Age, ncol=1) +  guides(col=guide_legend(ncol=1)) + ylab("Stand Rank") + xlab("Height Class") + scale_fill_manual(values=palrank)
+```
+
+*Understand how ranks are distributed among height classes for different age classes*
+
+``` {r}
+tmpdat <- dcast(stand_rank_lookup, Height + Age ~ Rank, fun.aggregate=length, drop=FALSE, value.var="Rank")
+rank_counts_ageht <- melt(tmpdat[1:8], id.vars=c("Age", "Height"))
+colnames(rank_counts_ageht) <- c("Age", "Height", "Rank", "NumberStandTypes")
+```
+
+``` {r, Fig.Rank_ageht2, fig.height=10, fig.width=5}
+ggplot(stand_rank_lookup, aes(x=Rank, fill=Height)) + geom_histogram(bins=6, col="black") + myfacettheme3 + scale_fill_manual(values=palht(4), name="Height Class") + facet_wrap(~Age, ncol=1) + scale_x_continuous(labels=c(1:6), breaks=1:6) + ylab("Number of Stand Types") + xlab("Stand Rank")
+
+ggplot(rank_counts_ageht, aes(x=Rank, y=NumberStandTypes, fill=Height)) + geom_bar(stat="identity", col="black", position=position_dodge(width=0.8), width=0.8) + myfacettheme2 + scale_fill_manual(values=palht(4), name="Height Class") + facet_wrap(~Age, ncol=1) + ylab("Number of Stand types") + xlab("Stand Rank")
+
+ggplot(rank_counts_ageht, aes(x=Age, y=NumberStandTypes, fill=Height)) + geom_bar(stat="identity", position=position_dodge(width=0.8), width=0.8, col="black") + myfacettheme2 + scale_fill_manual(values=palht(4), guide=FALSE) + facet_wrap(~Rank, ncol=1) + ylab("Number of Stand Types") + geom_text(aes(label=Height), position=position_dodge(width=0.8), vjust=0.0, hjust=-0.1, angle=90, size=3) + xlab("Age Class")
+
+ggplot(rank_counts_ageht, aes(x=Height, y=NumberStandTypes, fill=Age)) + geom_bar(stat="identity", col="black", position=position_dodge(width=0.8), width=0.8) + myfacettheme2 + scale_fill_brewer(palette="YlOrRd", guide=FALSE) + facet_wrap(~Rank, ncol=1) + ylab("Number of Stand Types") + geom_text(aes(label=Age), position=position_dodge(width=0.8), vjust=0.4, hjust=-0.1, angle=90, size=3) + xlab("Height Class")
+```
+
+
+``` {r Fig.Rank_ageht3, fig.width=8, fig.height=5}
+ggplot(stand_rank_lookup, aes(x=Age, y=Rank, fill=Height)) +  geom_boxplot(col="black", alpha=0.2, outlier.colour=NA, position=position_dodge(width=0.8)) + geom_point(shape=21, alpha=0.5, position=position_jitterdodge(dodge.width = 0.8, jitter.height =0.1, jitter.width = 0.3))+ scale_fill_manual(values=palht(4)) + scale_color_manual(values=palht(4)) + myfacettheme3 + ylab("Stand Rank") + xlab("Stand Age") + ylim("1", "2", "3", "4", "5", "6")
+
+ggplot(stand_rank_lookup, aes(x=Age, y=Rank, fill=Height)) +   geom_point(shape=21, alpha=0.5, position=position_jitterdodge(dodge.width = 0.8, jitter.height =0.1, jitter.width = 0.3))+ scale_fill_manual(values=palht(4)) + scale_color_manual(values=palht(4)) + myfacettheme3 + ylab("Stand Rank") + xlab("Stand Age")
+```
+
+``` {r Fig.Rank_ageht4, fig.width=8, fig.height=6, dpi=150}
+ggplot(rank_counts_ageht, aes(x=Height, y=NumberStandTypes, fill=as.factor(Rank))) + geom_bar(stat="identity", col="black", position=position_dodge(width=0.8), width=0.8) + myfacettheme3 +  facet_wrap(~Age, ncol=1) + ylab("Number of Stand Types") + scale_fill_manual(values=palrank, guide=FALSE) + geom_text(aes(label=Rank), position=position_dodge(width=0.8), vjust=-0.3, hjust=0.3, angle=0, size=3)
+
+ggplot(rank_counts_ageht, aes(x=Height, y=NumberStandTypes, fill=as.factor(Rank))) + geom_bar(stat="identity", position=position_dodge(width=0.8), width=0.8) + myfacettheme3 +  facet_wrap(~Age, ncol=1) + ylab("Number of Stand Types") + scale_fill_manual(values=palrank, guide=FALSE) + geom_text(aes(label=Rank), position=position_dodge(width=0.8), vjust=-0.3, hjust=0.3, angle=0, size=3)
+
+ggplot(rank_counts_ageht, aes(x=Height, y=NumberStandTypes, fill=as.factor(Rank))) + geom_bar(stat="identity", position=position_dodge(width=0.8), width=0.8) + myfacettheme2 +  facet_wrap(~Age, ncol=1) + ylab("Number of Stand Types") + scale_fill_manual(values=palrank, name="Stand Rank") + guides(fill=guide_legend(ncol=6))
+
+```
+
+# Strange Patterns in VRI Data
+
+**Purpose: Identify forest stands that have all four stand attributes**
+
+#### Upload Barb's VRI file, which has polygon area 
+
+``` {r}
+vri_b <- read.csv("data/VRI/Forsite_VRI_BAM_ForID_Export.txt", header=T)
+```
+
+``` {r}
+vri_4atts <- vri_b[c("ForID_Stnd", "BecZone", "SpeciesGroup_Stnd", "Age", "Height", "Rank", "ForID_AreaHa")] #Area per ForID previously calculated by Barb Sobota and verified by Nicole Barker
+colnames(vri_4atts)[c(1,3)] <- c("ForID", "SpeciesGroup")
+vri_4atts <- vri_4atts[!vri_4atts$BecZone %in% c("0"),]
+vri_4atts <- vri_4atts[!vri_4atts$SpeciesGroup %in% c("0", "999"),]
+vri_4atts <- vri_4atts[!vri_4atts$Age %in% c("0"),]
+vri_4atts <- vri_4atts[!vri_4atts$BecZone %in% c("BAFA_IMA", "CWH"),]
+```
+
+Subset these for unranked stands
+
+``` {r}
+vri_4atts_ForIDareas <- vri_4atts[!duplicated(vri_4atts),] # subset so only one row for each unique ForID
+vri_4atts_unranked <- vri_4atts_ForIDareas[!vri_4atts_ForIDareas$Rank %in% 1:6,] #remove ranked stands
+vri_4atts_unranked <- vri_4atts_unranked[order(vri_4atts_unranked$ForID),] # Sort by forid
+unranked_areas <- vri_4atts_unranked[order(vri_4atts_unranked$ForID_AreaHa, decreasing=T),] #sort by area
+write.table(unranked_areas, "reports/Apps/Unranked_stands.csv", col.names=T, row.names=F, sep=",") #save a copy to harddrive
+
+unranked_areas_above50ha <- unranked_areas[unranked_areas$ForID_AreaHa >= 50,]
+kable(unranked_areas_above50ha[c("BecZone", "SpeciesGroup", "Age", "Height", "ForID_AreaHa")], row.names=F)
+```
+
