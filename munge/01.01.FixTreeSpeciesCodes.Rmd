@@ -35,6 +35,7 @@ options(digits=12)
 7. **mig_birds_Layer_polyarea_forstandatts.RData**: Export of the Jan 2017 Forsite file. With a field I added calculating area (in ha) of each polygon
 8. **CanforTFLAttributeTable** -- Doesn't have SpeciesCode because it wasn't included in Forsite's analysis where they derived Tree Species Codes. 
 9. **birdVRIintersect_preprocess1.csv**: Intersections between the new (spring 2017 Avian database and VRI data from both Forsite file and Canfor TFL)
+10. **FORSITE_all_regions__Nicoles_VRI_fields_fixednames.csv**: An export of the VRI table, subsetted for the columns I want.  
 
 # Creating a master file of tree species codes. 
 
@@ -92,6 +93,10 @@ vrifull_codes <- data.frame(Layer="mig_birds_Layer_polyarea_forstandatts", code_
 vri_intersect <- read.csv("data/birdVRIintersect_preprocess1.csv", header=T)
 vri_intersect_codes <- data.frame(Layer="birdVRIintersect_preprocess1", code_orig=sort(as.character(unique(vri_intersect$SpeciesGroup))))
 ```
+
+
+####10. FORSITE_all_regions__Nicoles_VRI_fields_fixednames.csv
+Uses the same codes as "mig_birds_Layer_polyarea_forstandatts" so we're not going to re-create a set of rows for these column names. 
 
 ### Step: Combine dataframes of the various species codes, assigned to each file. 
 
@@ -174,4 +179,15 @@ barbvri2 <- barbvri[c(2:(ncol(barbvri)-2), 1,(ncol(barbvri)-1), ncol(barbvri))]
 write.table(barbvri2, file="data/barbvri-zSpGroup.csv", row.names=F, col.names=T, sep=",")
 
 head(barbvri2)
+```
+
+## File 5. FORSITE_all_regions__Nicoles_VRI_fields_fixednames.csv
+
+``` {r}
+vri_full <- read.csv("data/FORSITE_all_regions__Nicoles_VRI_fields_fixednames.csv", header=T)
+colnames(vri_full)[which(colnames(vri_full) %in% "SpeciesGroup")] <- "code_orig"
+vri_full <- merge(vri_full, lookup.spcd[lookup.spcd$file=="mig_birds_Layer_polyarea_forstandatts",], by="code_orig", all=T)
+vri_full2 <- vri_full[c(2:(ncol(vri_full)-2), 1,(ncol(vri_full)-1), ncol(vri_full))]
+
+write.table(vri_full2, file="data/FORSITE_all_regions__Nicoles_VRI_fields_fixednames-zSpGroup.csv", row.names=F, col.names=T, sep=",")
 ```

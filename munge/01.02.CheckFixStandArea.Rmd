@@ -85,13 +85,13 @@ Some forest stand types weren't ranked because they're not merchantable. If the 
 
 Subset for only those forest attributes described in the matrix documentation
 ``` {r}
-myforarea <- merge(mastermatrix,myforarea,  by="ForID", all.x=T) # merge to get other 4 stand attributes
+myforarea <- merge(mastermatrix, myforarea,  by="ForID", all.x=T) # merge to get other 4 stand attributes
 ```
 
 ``` {r echo=T}
 colnames(myforarea)[ncol(myforarea)] <- "area_Ha"
 
-df.tmp <- myforarea[c("BEC", "SpeciesGroup", "ForAge", "ForHt", "area_Ha")]
+df.tmp <- myforarea[c("BecZone", "SpeciesGroup", "Age", "Height", "area_Ha")]
 
 kable(df.tmp[1:15,], row.names=F)
 ```
@@ -101,7 +101,7 @@ Cast out into matrix format (i.e. same format the matrix came in from Kari)
 ``` {r}
 colnames(df.tmp)[ncol(df.tmp)] <- "value"
 
-mymat <- cast(df.tmp, BEC + SpeciesGroup ~ ForAge + ForHt ) 
+mymat <- cast(df.tmp, BecZone + SpeciesGroup ~ Age + Height ) 
 
 kable(mymat[1:2,], row.names=F)
 ```
@@ -127,10 +127,10 @@ Cast out into matrix format (i.e. same format the matrix came in from Kari)
 
 ``` {r echo=T}
 colnames(barb.mm)[which(colnames(barb.mm)=="TotalAreaHa")] <- "area_Ha"
-df.tmp <- barb.mm[c("BEC", "SpeciesGroup", "ForAge", "ForHt", "area_Ha")]
+df.tmp <- barb.mm[c("BecZone", "SpeciesGroup", "Age", "Height", "area_Ha")]
 
 colnames(df.tmp)[ncol(df.tmp)] <- "value"
-barbmat <- cast(df.tmp, BEC + SpeciesGroup ~ ForAge + ForHt ) # cast into matrix format
+barbmat <- cast(df.tmp, BecZone + SpeciesGroup ~ Age + Height ) # cast into matrix format
 ```
 
 ### 4. Compare my calculated areas to Barb's
@@ -181,7 +181,7 @@ write.table(comparea, "Output/ForestAreaCalcCompare-2017.12.csv", row.names=F, c
 **NOTES**
 
 * The biggest difference in calculated stand area between Barb's calculations and mine is: `r max(comparea$Diff)`
-* There are `r unique(comparea$DiffMoreThan.001)` stands where the difference in our calculations exceeds 0.001
+* There are `r sum(comparea$DiffMoreThan.001)` stands where the difference in our calculations exceeds 0.001
 
 #### Conclusions
 * Barb's forest stand areas and my forest calculated stand areas are the same.

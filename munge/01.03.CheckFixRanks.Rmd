@@ -92,17 +92,22 @@ However, a specific instance highlighted that there are sometimes other reasons 
 
 ``` {r, echo=T}
 vri.0 <- vri.qs[vri.qs$Rank == "0",] #data frame where ranks are 0
+vri.0 <- vri.0[!duplicated(vri.0$ForID),] #Remove any ForIds that were duplicatednrow(vri.0)
+vri.0 <- vri.0[order(vri.0$ForID),]
+
 unique(vri.0$BecZone)
 unique(vri.0$SpeciesGroup)
 unique(vri.0$Age)
 unique(vri.0$Height)
+
 ```
 
 * how many polygons have rank=0? `r nrow(vri.0)`
 * how many ForIds have rank=0 `r length(unique(vri.0$ForID))`
 
 ``` {r}
-kable(head(vri.0), row.names=F)
+kable(rbind(head(vri.0),
+      tail(vri.0)), row.names=F)
 ```
 
 Delete any rows from this table where missing information is precluding a rank. 
@@ -121,13 +126,15 @@ vri.0 <- vri.0[vri.0$Height %in% c("1", "2", "3", "4+"),] # height should be 1, 
 * Now how many ForIds have rank=0 `r length(unique(vri.0$ForID))`
 
 ``` {r}
-vri.0 <- vri.0[!duplicated(vri.0$ForID),] #Remove any ForIds that were duplicatednrow(vri.0)
-vri.0 <- vri.0[order(vri.0$ForID),]
-```
-
-``` {r}
 kable(rbind(head(vri.0), tail(vri.0)), row.names=F)
 ```
+
+##### Remove ForIDs with BecZones we don't care about
+
+``` {r}
+vri.0 <- vri.0[!vri.0$BecZone %in% c("BAFA_IMA", "CWH"),]
+```
+
 
 ##### Remove ForIDs with less than 50 hectares of area
 
@@ -143,14 +150,16 @@ kable(rbind(head(vri.0), tail(vri.0)), row.names=F)
 
 Subset for those with area less than 50 hectares
 
+These forest stand types (ForIDs) exist with more than 50 ha on the landscape but don't have a rank. 
+
 ``` {r}
 vri.50ha <- vri.0[vri.0$ForestArea > 50,]
 kable(vri.50ha[order(vri.50ha$ForID),], row.names=F)
 ```
 
 **Notes**
+I cross-referenced some of these combinations of BecZone and Species Group with the original matrix (Migratory_bird_ranking_matrix_V1.3_Apr15_2016 FINAL-dataformat-zSpGroup.csv) to check whether the missing rank is a Forsite error or a Kari omission
 
-I cross-referenced some of these combinations of BecZone and Species Group with the original matrix (Migratory_bird_ranking_matrix_V1.3_Apr15_2016 FINAL-dataformat-zSpGroup.csv)
 * BG_PP & Decid: Kari didn't score older stands. 
 * BG_PP & Pl: Small area
 * BG_PP & PyFd: old stands, short heights. Not scored
@@ -168,6 +177,7 @@ I cross-referenced some of these combinations of BecZone and Species Group with 
 * IDF & Decid: all age and height classes are missing ranks in the Forsite shapefile. Some of them have ranks in Kari's matrix. 
 
 **CONCLUSIONS on MISSING RANKS**
+
 * Many of the unranked ForIDs were not ranked because they were considered unlikely according to Kari. Many of these have small area on the landscape
 * One set was ranked by Kari but not transferred to the Forsite shapefile. IDF & Decid. I can fix this by pulling over Kari's ranks into a combined rank file based on forest attributes. 
 * Some forest stands exist with large areas but are not ranked in Kari's file. 
