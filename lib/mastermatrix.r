@@ -7,13 +7,13 @@ htlookup <- read.csv("data/LOOKUP.ForestHt.csv")
 spcodes <- sort(unique(splookup$code_use))
 spcodes <- spcodes[-which(spcodes %in% c("0", "999", ""))]
 
-mastermatrix <- expand.grid(BEC=beclookup$BEC[beclookup$InMatrix=="Yes"],
+mastermatrix <- expand.grid(BecZone=beclookup$BEC[beclookup$InMatrix=="Yes"],
                             SpeciesGroup=unique(spcodes),
-                            ForAge=unique(agelookup$ForAge),
-                            ForHt=unique(htlookup$ForHt))
-mastermatrix$ForAge <- factor(mastermatrix$ForAge, ordered=T, levels=levels(mastermatrix$ForAge)[c(3,4,5,1,2)])
-mastermatrix$ForHt <- factor(mastermatrix$ForHt, ordered=T, levels=c("1", "2", "3", "4+"))
-mastermatrix$ForID <- with(mastermatrix, paste(BEC, SpeciesGroup, ForAge, ForHt, sep="."))
+                            Age=unique(agelookup$ForAge),
+                            Height=unique(htlookup$ForHt))
+mastermatrix$Age <- factor(mastermatrix$Age, ordered=T, levels=levels(mastermatrix$Age)[c(3,4,5,1,2)])
+mastermatrix$Height <- factor(mastermatrix$Height, ordered=T, levels=c("1", "2", "3", "4+"))
+mastermatrix$ForID <- with(mastermatrix, paste(BecZone, SpeciesGroup, Age, Height, sep="."))
 qs <- mastermatrix
 
 # Creates a secondary ForID based on the original species codes.
@@ -26,13 +26,13 @@ splookup.vri <- splookup.vri[splookup.vri$SpeciesGroup %in% mastermatrix$Species
 
 mastermatrix <- merge(mastermatrix, splookup.vri[c("SpeciesGroup", "code_vri_file")], by="SpeciesGroup", all = T)
 mastermatrix <- mastermatrix[!duplicated(mastermatrix),]
-mastermatrix$ForID.VRISp <- with(mastermatrix, paste(BEC, code_vri_file, ForAge, ForHt, sep="."))
+mastermatrix$ForID.VRISp <- with(mastermatrix, paste(BecZone, code_vri_file, Age, Height, sep="."))
 mastermatrix$ForIDSame <- mastermatrix$ForID == mastermatrix$ForID.VRISp
 
-vartab <- data.frame(BEC=rep(NA, times=22), SpeciesGroup=rep(NA, times=22), ForAge=rep(NA, times=22), ForHt=rep(NA, times=22))
-vartab$BEC[1:length(unique(mastermatrix$BEC))]<- as.character(unique(mastermatrix$BEC))
+vartab <- data.frame(BecZone=rep(NA, times=22), SpeciesGroup=rep(NA, times=22), Age=rep(NA, times=22), Height=rep(NA, times=22))
+vartab$BecZone[1:length(unique(mastermatrix$BecZone))]<- as.character(unique(mastermatrix$BecZone))
 vartab$SpeciesGroup[1:length(unique(mastermatrix$SpeciesGroup))]<- as.character(unique(mastermatrix$SpeciesGroup))
-vartab$ForAge[1:length(levels(mastermatrix$ForAge))]<- as.character(levels(mastermatrix$ForAge))
-vartab$ForHt[1:length(levels(mastermatrix$ForHt))]<- as.character(levels(mastermatrix$ForHt))
+vartab$Age[1:length(levels(mastermatrix$Age))]<- as.character(levels(mastermatrix$Age))
+vartab$Height[1:length(levels(mastermatrix$Height))]<- as.character(levels(mastermatrix$Height))
 vartab[is.na(vartab)] <- ""
 

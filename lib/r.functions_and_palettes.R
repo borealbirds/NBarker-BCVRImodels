@@ -109,7 +109,7 @@ palbec <- c("#ff0000", #BG_PP
             "#548235")  #SWB
 
 # SpeciesGroup
-sgpal <- c("#833c0c", #Act
+palsg <- c("#833c0c", #Act
            "#b89268", #At_Con
            "#00b050", #CH
            "#a9d08e", #CH_Decid
@@ -132,14 +132,14 @@ sgpal <- c("#833c0c", #Act
            "#ffe699") #SwB_Decid
               
 #Age              
-agepal <- c("#e1f7e6", #3-30
+palage <- c("#e1f7e6", #3-30
             "#9fe1af", #31-80
             "#38c266", #81-120
             "#2b814c", #121-250
             "#144423") 
     
 #Height                  
-htpal <- c("#feffb3", #1
+palht <- c("#feffb3", #1
            "#f7f37a", #2
            "#f8e43b", #3
            "#f9c617") #4      
