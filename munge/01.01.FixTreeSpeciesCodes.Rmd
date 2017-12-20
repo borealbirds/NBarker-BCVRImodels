@@ -34,8 +34,8 @@ options(digits=12)
 5. **Stand_Ranking_Matrix_MBNestDensity_README_V1.3_Apr2016.docx**: Received August 15, 2016 from Kari. Text describing the matrix -- work done in Nov 2016 showed that the species groups are not defined the same way as in the matrix and the VRI shapefile.
 7. **mig_birds_Layer_polyarea_forstandatts.RData**: Export of the Jan 2017 Forsite file. With a field I added calculating area (in ha) of each polygon
 8. **CanforTFLAttributeTable** -- Doesn't have SpeciesCode because it wasn't included in Forsite's analysis where they derived Tree Species Codes. 
-9. **birdVRIintersect_preprocess1.csv**: Intersections between the new (spring 2017 Avian database and VRI data from both Forsite file and Canfor TFL)
-10. **FORSITE_all_regions__Nicoles_VRI_fields_fixednames.csv**: An export of the VRI table, subsetted for the columns I want.  
+9. **VRIintersect_preprocess1.csv**: Intersections between the new (spring 2017 Avian database and VRI data from both Forsite file and Canfor TFL)
+10. **FORSITE_all_regions__Nicoles_VRI_fields_fixednames.csv**: An export of the VRI table, subsetted for the columns I want.
 
 # Creating a master file of tree species codes. 
 
@@ -88,9 +88,9 @@ vri_full <- mig_birds_Layer_polyarea_forstandatts; rm(mig_birds_Layer_polyarea_f
 vrifull_codes <- data.frame(Layer="mig_birds_Layer_polyarea_forstandatts", code_orig=sort(as.character(unique(vri_full$SpeciesGroup))))
 ```
 
-####9. birdVRIintersect_preprocess1.csv
+####9. VRIintersect_preprocess1.csv
 ``` {r}
-vri_intersect <- read.csv("data/birdVRIintersect_preprocess1.csv", header=T)
+vri_intersect <- read.csv("data/VRIintersect_preprocess1.csv", header=T)
 vri_intersect_codes <- data.frame(Layer="birdVRIintersect_preprocess1", code_orig=sort(as.character(unique(vri_intersect$SpeciesGroup))))
 ```
 
@@ -151,17 +151,19 @@ write.table(vri_full2, file="data/mig_birds_Layer_polyarea_forstandatts-zSpGroup
 head(vri_full2)
 ```
 
-## File 3. birdVRIintersect_preprocess1.csv
+## File 3. VRIintersect_preprocess1.csv
 
-Intersections between the new (spring 2017 Avian database and VRI data from both Forsite file and Canfor TFL)
+Intersections between the new (spring 2017 Avian database and VRI data from both Forsite file and Canfor TFL).
+
+Note due to a file name change (for clarity), it looks like I might be pulling species code from the wrong section of the lookup table. But in fact it's correct. 
 
 ``` {r , eval=T}
-intxn <- read.csv("data/birdVRIintersect_preprocess1.csv", header=T)
+intxn <- read.csv("data/VRIintersect_preprocess1.csv", header=T)
 colnames(intxn)[which(colnames(intxn) == "SpeciesGroup")] <- "code_orig"
 intxn.c <- merge(intxn, lookup.spcd[lookup.spcd$file=="birdVRIintersect_preprocess1",], by="code_orig", all=T)
 intxn.c2 <- intxn.c[c(2:(ncol(intxn.c)-2), 1,(ncol(intxn.c)-1), ncol(intxn.c))]
 
-write.table(intxn.c2, file="data/birdVRIintersect_preprocess1-zSpGroup.csv", row.names=F, col.names=T, sep=",")
+write.table(intxn.c2, file="data/VRIintersect_preprocess1-zSpGroup.csv", row.names=F, col.names=T, sep=",")
 
 head(intxn.c2)
 ```

@@ -20,7 +20,8 @@ This script does the following
 
 * Look for and eliminate duplications
 * Correct any errors noticed during pre-processing
-* 
+* Save a pre-processed table of point count data for future use: data/birddata_preprocess1.csv 
+
 
 ``` {r setup, echo=F, message=F, warning=F}
 require(knitr)

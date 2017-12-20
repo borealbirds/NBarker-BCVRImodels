@@ -29,6 +29,16 @@ In this script:
 * I calculate temporal alignment
 * I filter out point counts I don't trust b/c of mis-alignment with VRI attributes
 
+### Pre-process vri file
+
+* Convert date columns to date format and pull out year
+* 
+
+``` {r}
+vri_intersect <- load("cache/")
+ 
+```
+
 ### Possible dates to consider
 
 * **input_date**: The date the forest cover information was entered into the Provincial Data Base.
@@ -41,21 +51,10 @@ In this script:
 
 ##### Look at the various dates
 
-``` {r}
-vri_intersect <- read.csv("data/birdVRIintersect_preprocess1.csv", header=T)
-vri_intersect$INPUT_DATE <- unlist(lapply(strsplit(as.character(vri_intersect$INPUT_DATE), " "), function(x) {x[1]}))
-vri_intersect$INTERPRETATION_DATE <- unlist(lapply(strsplit(as.character(vri_intersect$INTERPRETATION_DATE), " "), function(x) {x[1]}))
-vri_intersect$ATTRIBUTION_BASE_DATE <- unlist(lapply(strsplit(as.character(vri_intersect$ATTRIBUTION_BASE_DATE), " "), function(x) {x[1]}))
-vri_intersect$REFERENCE_DATE <- unlist(lapply(strsplit(as.character(vri_intersect$REFERENCE_DATE), " "), function(x) {x[1]}))
-vri_intersect$PROJECTED_DATE <- unlist(lapply(strsplit(as.character(vri_intersect$PROJECTED_DATE), " "), function(x) {x[1]}))
-vri_intersect$EARLIEST_NONLOGGING_DIST_DATE <- unlist(lapply(strsplit(as.character(vri_intersect$EARLIEST_NONLOGGING_DIST_DATE), " "), function(x) {x[1]}))
-vri_intersect$HARVEST_DATE <- unlist(lapply(strsplit(as.character(vri_intersect$HARVEST_DATE), " "), function(x) {x[1]}))
-vri_intersect$REFERENCE_YEAR <- unlist(lapply(strsplit(as.character(vri_intersect$REFERENCE_YEAR), " "), function(x) {x[1]}))
-vri_intersect$Disturbance_date_calculated <- apply(vri_intersect[c("EARLIEST_NONLOGGING_DIST_DATE", "HARVEST_DATE")], MARGIN=1, FUN=function(x) {max(x, na.rm=T)})  
+ 
+```{r}
+vri_dates <- vri_intersect[c(grep(c("Year"), colnames(vri_intersect)), which(colnames(vri_intersect) %in% c("PROJ_AGE_1", "VRIintersectLayer", "EARLIEST_NONLOGGING_DIST_TYPE", "INTERPRETER", "INTERPRETED_DATA_SRC_CD"), ))]
 
-vri_dates <- vri_intersect[c(grep(c("DATE"), colnames(vri_intersect)), grep(c("YEAR"), colnames(vri_intersect)), which(colnames(vri_intersect) %in% c("PROJ_AGE_1", "VRIintersectLayer")))]
-
-vri_dates <- vri_dates[-which(colnames(vri_dates) %in% c("INPUT_DATE", "ATTRIBUTION_BASE_DATE"))]
 vri_dates <- vri_dates[order(vri_dates$VRIintersectLayer, vri_dates$PROJ_AGE_1),]
 
 write.table(vri_dates, file="data/VRI_date_QC.csv", sep=",", row.names=F, col.names=T)
@@ -79,20 +78,57 @@ kable(vri_dates_sample, row.names=F)
 
 There are three events: 
 
-1. BAM survey (bird observations)
-2. Forest inventory (indicated by 'reference year', the year that the underlying data - photo or field survey - are from)
-3. Disturbance (either harvest 'harvest_date' or nonlogging 'earliest_nonlogging_dist')
+1. BAM survey conducted (bird observations)
+2. Forest inventory data collected (indicated by 'reference year', the year that the underlying data - photo or field survey - are from)
+3. Disturbance occurred (either harvest 'harvest_date' or nonlogging 'earliest_nonlogging_dist' or possibly not recorded in the inventory)
 
 Scenarios. 
 ![ ^^^ Image. Depiction of the 6 possible scenarios for how there may be a mismatch between conditions experienced by the surveyed bird and what the VRI dataset says.](../metadata/VRI/Vri_bird_temporal_alignment_scenarios.jpg)
 
 
+#### Further complication: time lag since reference year
+
+Age, height, and other attributes are time-dependent. This text is from the VRIdata_userguide.pdf: "In many cases, the value for an attribute may need to be projected forward to a date other than at which it was originally recorded. Most attributes are not particularly time sensitive, and are simply carried forward unchanged. Altered attributes are primarily those based on age and height (i.e. timber volume), the latter of which is “grown” based on the derived site index. Note that there are no patterns of stand dynamics in the projection process, and that attributes such as % crown closure and percent occurrence of different species are left unchanged.
+
+There are two main reasons for projecting the inventory: coordinating the entire inventory to a single time reference, and evaluating future forest conditions and values. The concept of the VRI as a “snapshot” inventory is somewhat misleading, as the base data may be derived from several different time periods (i.e. aerial photo dates, silviculture and inventory survey dates). Where it is necessary to evaluate the land base at a particular date, projected attributes are required. The date of interest may be the current date, some date in the future, or a sequence of dates in between."
+
+Age of course can be projected reliably, assuming there hasn't been a disturbance in the intervening years. However, "Projected Height is determined by applying the Projected Age to various site index functions for the leading commercial species: a)- an ecologically based site index is used (e.g. mid- point of site class) for young stands (i.e. Projected Age less than 30 years). b)-site index functions are used to determine Projected Height for older stands (i.e. Projected Age greater than, or equal to, 30 years)."
+
+The resulting projection will be as reliable as the model, so we perhaps have less confidence in the projected height as the time lag between inventory data (reference_year) and the bird survey date increases. 
+##### Calculate the difference (in years) between BAM Survey year and VRI photo/reference year
+
+Merge the intersected VRI polygons with the point count survey information (pkey)
+
+``` {r, Fig.Diff_BirdSurvey_VRIPhoto, fig.height=6, fig.width=9, dpi=200}
+birds <- read.csv("data/birddata_preprocess1.csv", header=T)
+birdsurveys <- birds[c("PKEY", "SS", "YYYY")]
+birdsurveys <- birdsurveys[!duplicated(birdsurveys),]
+
+vri_birdsurveys <- merge(vri_intersect, birdsurveys, by="SS", all.y=T)
+vri_birdsurveys$Difference_Bird_Photo <- vri_birdsurveys$YYYY - as.numeric(vri_birdsurveys$ReferenceYear)
+
+ggplot(vri_birdsurveys, aes(x=Difference_Bird_Photo, fill=DisturbanceYear)) + geom_histogram(bins=40) + myfacettheme3 + ylab("Number of Point Count Surveys") + xlab("Difference (in years) between bird survey year and VRI Reference Year") + geom_vline(xintercept=0, linetype="dashed", color="red", size=1)
+```
+
+### Cut out data if the difference between bird survey and reference year is too great
+
+* Make the time lag of "too great" dependent on stand age class
+* 
+
+
+
+
+
+
+
+
+
+### Eliminate the scenarios we may not trust, keeping only those we're pretty darn confident in
+
+
 
 Steps: 
 
-#### Difference (in years) between BAM Survey year and VRI photo/reference year
-
-Plot a histogram
 
 
 ``` {r}
