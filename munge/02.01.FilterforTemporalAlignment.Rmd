@@ -68,8 +68,34 @@ kable(vri_dates_sample, row.names=F)
 
 **NOTES**
 
-* PROJ_AGE_1 doesn't always correspond to difference between projected date and 
+* PROJ_AGE_1 doesn't always correspond to difference between projected date and disturbance date. 
+* Do I trust age? 
+    * Do I have much choice otherwise? (No)
+* I met with Steve Cumming on Dec 19, 2017 to discuss my concerns. After looking at several instances, we concluded that sometimes data may not be updated after a given disturbance. This would explain some of the discrepancies. 
+* Steve also points out that there are regeneration delays. A disturbance might have happened 50 years ago, but the stand is 45 years old. The forest didn't start regenerating until 5 years post harvest for some reason or another. 
+* Decision: Deal with concerns over temporal alignment between bird observations and forest inventory data. Then deal with other concerns.
 
+## Possible Scenarios of Alignment between Bird data, Inventory data, and Disturbance
+
+There are three events: 
+
+1. BAM survey (bird observations)
+2. Forest inventory (indicated by 'reference year', the year that the underlying data - photo or field survey - are from)
+3. Disturbance (either harvest 'harvest_date' or nonlogging 'earliest_nonlogging_dist')
+
+Scenarios. 
+![ ^^^ Image. Depiction of the 6 possible scenarios for how there may be a mismatch between conditions experienced by the surveyed bird and what the VRI dataset says.](../metadata/VRI/Vri_bird_temporal_alignment_scenarios.jpg)
+
+
+
+Steps: 
+
+#### Difference (in years) between BAM Survey year and VRI photo/reference year
+
+Plot a histogram
+
+
+``` {r}
 
 
 
