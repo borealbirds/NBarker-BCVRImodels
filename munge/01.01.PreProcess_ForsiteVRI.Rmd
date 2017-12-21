@@ -1,0 +1,73 @@
+---
+title: "Preprocess Full Forsite VRI Files"
+author: "Nicole Barker"
+date: "Last run: Dec 20, 2017"
+output: 
+  word_document:
+    reference_docx: ../styles/ReportFormat_1.docx
+---
+
+## Background
+
+**FILES**
+
+1. FORSITE_all_regions__Nicoles_VRI_fields_fixednames.csv
+
+In this script, I: 
+
+* Inspect for duplicates
+
+Note that CanfortflAttributeTable.txt is processed in another file. 
+
+
+``` {r setup, echo=F, message=F, warning=F}
+require(knitr)
+opts_knit$set(root.dir = '..')
+```
+
+``` {r load.project, message=F}
+require(ProjectTemplate)
+load.project()
+options(digits=12)
+```
+
+
+## FORSITE_all_regions__Nicoles_VRI_fields_fixednames.csv
+
+This is an export of the attribute table from "M:\DataStuff\SpatialData\VegetationResourceInventory\2016.10_Download\FORSITE_all_regions_all_vri_fields.gdb", dropped to the fields I wanted. 
+
+The "fixednames" is because the table exported with incomplete field names. This was fixed in a previous iteration of analyses, so I don't need to repeat it now. 
+
+``` {r}
+vri_forsite <- read.csv("data/FORSITE_all_regions__Nicoles_VRI_fields_fixednames.csv", header=T)
+kable(data.frame(ColNames=colnames(vri_forsite)))
+```
+
+#### Initial exploration to understand the format of the shapefile attribute table
+
+* Number of unique objects in the polygon attribute table (OBJECT_ID): `r length(unique(vri_forsite$OBJECTID))`
+* Number of unique polygons in the polygon attribute table (FEATURE_ID): `r length(unique(vri_forsite$FEATURE_ID))`
+* Number of rows in the polygon attribute table: `r nrow(vri_forsite)`
+* Number of unique forest stand types in the polygon attribute table (ForID): `r length(unique(vri_forsite$ForID))` 
+* Number of possible unique forest stand types based on combination of 4 attributes: `r length(unique(mastermatrix$ForID))`
+
+**Conclusions:** 
+
+* both OBJECTID and FEATURE_ID are unique identifiers for rows (polygons) in this file.
+* No duplicates because same number of rows as unique polygon IDs. 
+
+## Add in polygon area
+
+In a previous analysis, I calculated the area of each polygon using the calculate geometry command in ArcMap. 
+Here I'm merging polygon area with the remaining VRI attributes in this file. 
+
+``` {r}
+load("cache/mig_birds_Layer_polyarea_forstandatts.RData")
+vri_forsite <- merge(mig_birds_Layer_polyarea_forstandatts[c("FEATURE_ID", "polygon_area_cal")], vri_forsite, by="FEATURE_ID", all=T)
+```
+
+#### Save file
+
+``` {r}
+cache("vri_forsite")
+```

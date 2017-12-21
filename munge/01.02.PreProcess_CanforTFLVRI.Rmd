@@ -1,0 +1,49 @@
+---
+title: "Preprocess Canfor TFL VRI File"
+author: "Nicole Barker"
+date: "Last run: Dec 20, 2017"
+output: 
+  word_document:
+    reference_docx: ../styles/ReportFormat_1.docx
+---
+
+## Background
+
+**FILES**
+
+1. CanfortflAttributeTable.txt
+
+In this script, I: 
+
+* Inspect for duplicates
+
+Note that FORSITE_all_regions__Nicoles_VRI_fields_fixednames.csv is processed in another file. 
+
+
+``` {r setup, echo=F, message=F, warning=F}
+require(knitr)
+opts_knit$set(root.dir = '..')
+```
+
+``` {r load.project, message=F}
+require(ProjectTemplate)
+load.project()
+options(digits=12)
+```
+
+## canfortflAttributeTable.txt
+
+``` {r}
+vri_canfortfl <- read.csv("data/canfortflAttributeTable.txt", header=T)
+```
+
+#### Initial exploration to understand the format of the shapefile attribute table
+
+* Number of unique objects in the polygon attribute table (OBJECTID): `r length(unique(vri_canfortfl$OBJECTID))`
+* Length of the attribute table (nrows): `r nrow(vri_canfortfl)`
+
+#### Save file
+
+``` {r}
+cache("vri_canfortfl")
+```

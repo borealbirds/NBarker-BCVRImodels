@@ -1,7 +1,7 @@
 ---
 title: "Quality-checking Ranks from Forsite's GIS tool to the Excel Format Matrix"
 author: "Nicole Barker"
-date: "December 14, 2017"
+date: "December 20, 2017"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -33,10 +33,11 @@ load.project()
 
 Downloaded from http://webftp.forsite.ca/outgoing/vri_all_fields/ ; Username: mbirds ; Password: Lewis
 
-In previous steps/scripts, I cut out some columns and standardized for species groups . 
+In previous steps/scripts, I cut out some columns and standardized for species groups. I also quality-checked and recalculated area. 
 
 ``` {r cleanvri, echo=T}
-vri <- read.csv("data/mig_birds_Layer_polyarea_forstandatts-zSpGroup.csv")
+load("cache/vri_forsite_zSpGroup.RData")
+vri <- vri_forsite_zSpGroup; rm(vri_forsite_zSpGroup)
 colnames(vri)[which(colnames(vri) == "code_use")] <- "SpeciesGroup"
 vri$ForID <- with(vri, paste(BecZone, SpeciesGroup, Age, Height, sep="."))
 vri.qs <- vri[c("ForID", "Rank", "BecZone", "SpeciesGroup", "Age", "Height")] #quick save. 
@@ -140,7 +141,7 @@ vri.0 <- vri.0[!vri.0$BecZone %in% c("BAFA_IMA", "CWH"),]
 
 ``` {r}
 vri.0.qs <- vri.0 #quicksave
-forarea <- read.csv("data/ForestAreaCalc-long-2017.12.csv", header=T)
+forarea <- read.csv("data/ForIDAreaCalc-long-2017.12.csv", header=T)
 colnames(forarea)[2] <- "ForestArea"
 vri.0 <- merge(vri.0, forarea[c("ForID", "ForestArea")], by="ForID") 
 vri.0 <- vri.0[order(vri.0$ForestArea, decreasing=T),]
@@ -188,7 +189,7 @@ kable(vri.50ha[1:30,], row.names=F)
 
 ### replace "0" ranks with "unranked"
 
-Even though some of these stands _should_ be ranked, they are not ranked in the Forsite shapefile. For the purposes of future comparisons, let's relable all 0 rank stands as "unranked"
+Even though some of these stands _should_ be ranked, they are not ranked in the Forsite shapefile. For the purposes of comparisons in the next steps, let's relable all 0 rank stands as "unranked"
 
 ``` {r echo=T}
 vri$Rank[vri$Rank == 0] <- "unranked"
@@ -209,7 +210,7 @@ Forest stand ranks, formatted into the 'matrix format'. Supplied by Forsite to K
 I don't need to run this comparision this time around. I ran it in late 2016/early 2017 and found that these ranks are wrong. 
 
 
-# 2. The "FINAL" matrix file: "Migratory_bird_ranking_matrix_V1.3_Apr15_2016 FINAL.xlsx"
+# 3. The "FINAL" matrix file: "Migratory_bird_ranking_matrix_V1.3_Apr15_2016 FINAL.xlsx"
 
 Kari's ranks in matrix format. A few formatting changes were made:
 
@@ -286,6 +287,7 @@ kable(rbind(head(matcomp), tail(matcomp)), row.names=F)
 ```
 
 **Notes** 
+
 * There are `r sum(is.na(matcomp$sameranks.VRI.KariMat))` rows where a comparison yielded a "NA" value. Now all comparison values are one of: `r unique(matcomp$sameranks.VRI.KariMat)`
 
 ### Compare ranks 
@@ -356,6 +358,6 @@ ranks[ranks$ForestArea == 0,]$FinalRank <- "Unranked"
 ```
 
 ``` {r}
-write.table(ranks, file="data/Ranks_final_long.csv", sep=",", row.names=F, col.names = T)
+write.table(ranks, file="data/ForID_Ranks_final_long.csv", sep=",", row.names=F, col.names = T)
 
 ```

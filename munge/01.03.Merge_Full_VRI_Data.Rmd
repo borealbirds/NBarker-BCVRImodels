@@ -1,0 +1,167 @@
+---
+title: "Merge Forsite and Canfor TFL VRI files together"
+author: "Nicole Barker"
+date: "Last run: Dec 20, 2017"
+output: 
+  word_document:
+    reference_docx: ../styles/ReportFormat_1.docx
+---
+
+## Background
+
+Forsite's VRI file has blank attributes for tree farm licences (TFLs) that Canfor has data for. Canfor gave us their VRI data for those forest stands. I separately quality-checked and processed the two VRI datasets and now it's time to combine them, after doing a bit more processing. 
+
+**FILES**
+
+1. vri_forsite_zSpGroup_fixedRankArea.RData
+2. vri_canfortfl.RData
+
+In this script, I: 
+
+* Look for overlapping columns between two VRI files
+* create blank columns in Canfor table where I need them
+* Combine two VRI files together
+* Convert date columns to date format 
+* Pull year out from date
+* Classify stands to a stand age class if not already done
+* Classify stands to a stange height class if not already done
+* Create multiple files for future use 
+    * Forsite VRI: for analyses using Kari/Forsite's 4 derived attributes (will exclude Canfor TFL); and
+    * All VRI: for density models (using variables from VRI directly, not derived)
+
+
+``` {r setup, echo=F, message=F, warning=F}
+require(knitr)
+opts_knit$set(root.dir = '..')
+```
+
+``` {r load.project, message=F}
+require(ProjectTemplate)
+load.project()
+options(digits=12)
+```
+
+### Look for overlapping columns between two VRI files
+
+``` {r}
+load("cache/vri_forsite_zSpGroup.RData")
+vri_forsite <- vri_forsite_zSpGroup; rm(vri_forsite_zSpGroup)
+colnames(vri_forsite)[which(colnames(vri_forsite)=="code_use")] <- "SpeciesGroup" #rename standardized species codes to "SpeciesGroup"
+forsite_colnames <- data.frame(ColName=colnames(vri_forsite), In_ForsiteVRI=as.character("Yes"))
+
+load("cache/vri_canfortfl.RData")
+canfor_colnames <- data.frame(ColName=colnames(vri_canfortfl), In_vri_canfortfl=as.character("Yes"))
+```
+
+``` {r}
+all_colnames <- merge(canfor_colnames, forsite_colnames, by="ColName", all=T)
+
+all_colnames$In_vri_canfortfl <- as.character(all_colnames$In_vri_canfortfl)
+all_colnames$In_ForsiteVRI <- as.character(all_colnames$In_ForsiteVRI)
+
+all_colnames$In_vri_canfortfl[is.na(all_colnames$In_vri_canfortfl)] <- ""
+all_colnames$In_ForsiteVRI[is.na(all_colnames$In_ForsiteVRI)] <- ""
+
+kable(all_colnames, row.names=F)
+```
+
+#### Add blank columns for those I need from the Forsite layer (i.e. derived fields)
+
+``` {r}
+vri_canfortfl$BecZone <- NA                 
+vri_canfortfl$SpeciesGroup <- NA
+vri_canfortfl$Age <- NA
+vri_canfortfl$Height <- NA
+vri_canfortfl$Rank <- NA
+vri_canfortfl$FD_PERCENT <- NA
+vri_canfortfl$PL_PERCENT <- NA
+vri_canfortfl$AT_PERCENT <- NA
+vri_canfortfl$Decid_PERCENT <- NA
+vri_canfortfl$polygon_area_cal <- NA
+vri_canfortfl$FEATURE_ID <- NA
+vri_forsite$OBJECTID <- NA
+
+canfor_colnames <- data.frame(ColName=colnames(vri_canfortfl), In_vri_canfortfl=as.character("Yes"))
+
+all_colnames <- merge(canfor_colnames, forsite_colnames, by="ColName", all=T)
+
+all_colnames$In_vri_canfortfl <- as.character(all_colnames$In_vri_canfortfl)
+all_colnames$In_ForsiteVRI <- as.character(all_colnames$In_ForsiteVRI)
+
+all_colnames$In_vri_canfortfl[is.na(all_colnames$In_vri_canfortfl)] <- ""
+all_colnames$In_ForsiteVRI[is.na(all_colnames$In_ForsiteVRI)] <- ""
+
+kable(all_colnames, row.names=F)
+```
+
+## Merge two VRI files together
+
+#### Subset for common set of columns
+``` {r}
+commoncols <- all_colnames[all_colnames$In_vri_canfortfl == "Yes" & all_colnames$In_ForsiteVRI == "Yes",]$ColName
+
+vri_canfortfl2 <- vri_canfortfl[which(colnames(vri_canfortfl) %in% commoncols)]
+vri_canfortfl2$VRI_Layer <- "Canfor_TFL"
+vri_forsite2 <- vri_forsite[which(colnames(vri_forsite) %in% commoncols)]
+vri_forsite2$VRI_Layer <- "Forsite_VRI"
+```
+
+#### rbind together
+
+``` {r}
+vri_all <- rbind(vri_canfortfl2, vri_forsite2)
+```
+
+## More pre-processing
+
+### Date pre-processing
+
+``` {r, warning=F, message=F}
+F.convertdate.extractyear <- function(x){
+  dates <- as.Date(unlist(lapply(strsplit(as.character(x), " "), function(y) {y[1]})), format="%m/%d/%Y")
+  years <- format(dates,'%Y')
+}
+
+vri_all$InputYear <- F.convertdate.extractyear(vri_all$INPUT_DATE)
+vri_all$ProjectedYear <- F.convertdate.extractyear(vri_all$PROJECTED_DATE)
+vri_all$InterpretYear <- F.convertdate.extractyear(vri_all$INTERPRETATION_DATE)
+vri_all$ReferenceYear <- F.convertdate.extractyear(vri_all$REFERENCE_DATE)
+vri_all$AttributionYear <- F.convertdate.extractyear(vri_all$ATTRIBUTION_BASE_DATE)
+vri_all$DistYear_Nonlog <- F.convertdate.extractyear(vri_all$EARLIEST_NONLOGGING_DIST_DATE)
+vri_all$DistYear_Log <- F.convertdate.extractyear(vri_all$HARVEST_DATE)
+vri_all$DisturbanceYear <- apply(vri_all[c("DistYear_Nonlog", "DistYear_Log")], MARGIN=1, FUN=function(x) {max(x, na.rm=T)}) 
+```
+
+### Stand Age classification
+
+``` {r}
+ageclassbreaks <- c(0, 3, 30, 80, 120, 250, 1000)
+vri_all$AgeClass_calc <- cut(vri_all$PROJ_AGE_1, breaks = ageclassbreaks, include.lowest = TRUE, labels = c("0-3 yrs", "3-30 yrs", "31-80 yrs", "81-120 yrs", "121-250 yrs", ">250 yrs"))
+
+kable(rbind(head(vri_all[c("PROJ_AGE_1", "AgeClass_calc", "VRI_Layer")]),
+            tail(vri_all[c("PROJ_AGE_1", "AgeClass_calc", "VRI_Layer")])))
+```
+
+### Stand Height classification
+
+``` {r}
+heightclassbreaks <- c(0, 10.5, 19.5, 28.5, 100)
+vri_all$HeightClass_calc <- cut(vri_all$PROJ_HEIGHT_1, breaks = heightclassbreaks, include.lowest = TRUE, labels = c("<10.5 m", "10.5-19.4 m", "19.5-28.4 m", "> 28.5 m"))
+
+kable(rbind(head(vri_all[c("PROJ_HEIGHT_1", "HeightClass_calc", "VRI_Layer")]),
+            tail(vri_all[c("PROJ_HEIGHT_1", "HeightClass_calc", "VRI_Layer")])))
+```
+
+## Save files
+
+``` {r, eval=T}
+cache("vri_all")
+
+vri_canfortfl_postclean <- vri_all[vri_all$VRI_Layer == "Canfor_TFL",]
+cache("vri_canfortfl_postclean")
+
+vri_forsite_postclean <- vri_all[vri_all$VRI_Layer == "Forsite_VRI",]
+cache("vri_forsite_postclean")
+```
+
+

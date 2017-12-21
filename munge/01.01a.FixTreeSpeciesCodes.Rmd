@@ -1,7 +1,7 @@
 ---
 title: "TroubleShooting Tree Species Codes"
 author: "Nicole Barker"
-date: "Last run: Dec 14, 2017"
+date: "Last run: Dec 20, 2017"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -32,10 +32,12 @@ options(digits=12)
 3. **Migratory_bird_ranking_matrix_V1.3_Apr15_2016 FINAL.xlsx**: Received August 15, 2016 from Kari. Another form of the matrix -- Work done in Feb 2017 showed that the ranks in this file are DIFFERENT from those in file #1, above. **This file supercedes the area_summary_with_matrix file** I use this file to assign ranks to forest stands, where applicable.
 4. Email from Cam Brown listing the codes used in the Forsite GIS analysis. I don't have a separate table for them, but they're in the lookup table. These match those in the VRI shapefile. 
 5. **Stand_Ranking_Matrix_MBNestDensity_README_V1.3_Apr2016.docx**: Received August 15, 2016 from Kari. Text describing the matrix -- work done in Nov 2016 showed that the species groups are not defined the same way as in the matrix and the VRI shapefile.
-7. **mig_birds_Layer_polyarea_forstandatts.RData**: Export of the Jan 2017 Forsite file. With a field I added calculating area (in ha) of each polygon
-8. **CanforTFLAttributeTable** -- Doesn't have SpeciesCode because it wasn't included in Forsite's analysis where they derived Tree Species Codes. 
-9. **VRIintersect_preprocess1.csv**: Intersections between the new (spring 2017 Avian database and VRI data from both Forsite file and Canfor TFL)
-10. **FORSITE_all_regions__Nicoles_VRI_fields_fixednames.csv**: An export of the VRI table, subsetted for the columns I want.
+7. **mig_birds_Layer_polyarea_forstandatts.RData**: Export of the Jan 2017 Forsite file. With a field I added calculating area (in ha) of each polygon **As of December 2017, I don't need this table because I'm using a slightly preprocessed version of the VRI data**
+8. **CanforTFLAttributeTable** -- Doesn't have SpeciesCode because it wasn't included in Forsite's analysis where they derived Tree Species Codes.  **Therefore no need to correct/standarize**
+9. **VRIintersect_preprocess1.csv**: Intersections between the new (spring 2017 Avian database and VRI data from both Forsite file and Canfor TFL)  **As of December 2017, I don't need this table because I decided to clean up the full VRI dataset first and then subset it for the intersected dataset, rather than QCing them separately**
+10. **FORSITE_all_regions__Nicoles_VRI_fields_fixednames.csv**: An export of the VRI table, subsetted for the columns I want. **As of December 2017, I don't need this table because I'm using a slightly preprocessed version of the VRI data, saved as an RData file**
+11. **vri_forsite.RData**: The slightly preprocessed version of VRI data (Forsite) i mention several times above. Doesn't include Canfor TFL data because Canfor TFL data doesn't have speciescode so no need to standarize
+
 
 # Creating a master file of tree species codes. 
 
@@ -63,25 +65,25 @@ BAMptsnew <- sort(as.character(unique(df.BAMpts$SpeciesGroup)))
 ```
 
 ####3 Migratory_bird_ranking_matrix_V1.3_Apr15_2016 FINAL.xlsx
-``` {r}
+``` {r, eval=F}
 matrixstr <- read.csv("data/Migratory_bird_ranking_matrix_V1.3_Apr15_2016 FINAL-dataformat.csv")
 kari_codes <- data.frame(Layer="Migratory_bird_ranking_matrix_V1.3_Apr15_2016", code_orig=sort(as.character(unique(matrixstr$SP_Group))))
 ```
 
 ####4. Cam Brown report
-``` {r}
+``` {r, eval=F}
 forrpt <- read.csv("data/ForsiteProjectReport_SpeciesCodes.csv", header=T)
 cambrown_codes <- data.frame(Layer="Forsite project report from Cam Brown", code_orig=sort(as.character(unique(forrpt$Code))))
 ```
 
 ####5. Stand_Ranking_Matrix_MBNestDensity_README_V1.3_Apr2016.docx
-``` {r}
+``` {r, eval=F}
 df.README_V1.3_Apr2016_TreeSpeciesCodes <- read.csv("data/Stand_Ranking_Matrix_MBNestDensity_README_V1.3_Apr2016_TreeSpeciesCodes.csv")
 README_V1.3_Apr2016_codes <- data.frame(Layer="Stand_Ranking_Matrix_MBNestDensity_README_V1.3_Apr2016", code_orig=sort(as.character(unique(df.README_V1.3_Apr2016_TreeSpeciesCodes$Code))))
 ```
 
 ####7. mig_birds_Layer_polyarea_forstandatts.RData
-``` {r}
+``` {r, eval=F}
 load("cache/mig_birds_Layer_polyarea_forstandatts.RData")
 vri_full <- mig_birds_Layer_polyarea_forstandatts; rm(mig_birds_Layer_polyarea_forstandatts)
 
@@ -89,18 +91,20 @@ vrifull_codes <- data.frame(Layer="mig_birds_Layer_polyarea_forstandatts", code_
 ```
 
 ####9. VRIintersect_preprocess1.csv
-``` {r}
+``` {r, eval=F}
 vri_intersect <- read.csv("data/VRIintersect_preprocess1.csv", header=T)
 vri_intersect_codes <- data.frame(Layer="birdVRIintersect_preprocess1", code_orig=sort(as.character(unique(vri_intersect$SpeciesGroup))))
 ```
 
-
 ####10. FORSITE_all_regions__Nicoles_VRI_fields_fixednames.csv
+Uses the same codes as "mig_birds_Layer_polyarea_forstandatts" so we're not going to re-create a set of rows for these column names. 
+
+#### 11. **vri_full.RData**: 
 Uses the same codes as "mig_birds_Layer_polyarea_forstandatts" so we're not going to re-create a set of rows for these column names. 
 
 ### Step: Combine dataframes of the various species codes, assigned to each file. 
 
-``` {r}
+``` {r, eval=F}
 df <- rbind(kari_codes, cambrown_codes, README_V1.3_Apr2016_codes, vrifull_codes, vri_intersect_codes)
                
 write.table(df, file="data/tmp_TreeSpeciesCodes.csv", row.names=F, col.names=T, sep=",")
@@ -138,8 +142,9 @@ head(cmat2)
 ## File 2. mig_birds_Layer_polyarea_forstandatts.RData
 
 Export of the Jan 2017 Forsite file. With a field I added calculating area (in ha) of each polygon.
+Don't need a corrected version of this because using a different file instead. Set eval=F
 
-``` {r }
+``` {r eval=F}
 load("cache/mig_birds_Layer_polyarea_forstandatts.RData")
 vri_full <- mig_birds_Layer_polyarea_forstandatts
 colnames(vri_full)[which(colnames(vri_full)=="SpeciesGroup")] <- "code_orig"
@@ -157,7 +162,9 @@ Intersections between the new (spring 2017 Avian database and VRI data from both
 
 Note due to a file name change (for clarity), it looks like I might be pulling species code from the wrong section of the lookup table. But in fact it's correct. 
 
-``` {r , eval=T}
+Don't need a corrected version of this because using a different file instead. Set eval=F
+
+``` {r eval=F}
 intxn <- read.csv("data/VRIintersect_preprocess1.csv", header=T)
 colnames(intxn)[which(colnames(intxn) == "SpeciesGroup")] <- "code_orig"
 intxn.c <- merge(intxn, lookup.spcd[lookup.spcd$file=="birdVRIintersect_preprocess1",], by="code_orig", all=T)
@@ -184,12 +191,26 @@ head(barbvri2)
 ```
 
 ## File 5. FORSITE_all_regions__Nicoles_VRI_fields_fixednames.csv
+Don't need a corrected version of this because using a different file instead. Set eval=F
 
-``` {r}
+``` {r eval=F}
 vri_full <- read.csv("data/FORSITE_all_regions__Nicoles_VRI_fields_fixednames.csv", header=T)
 colnames(vri_full)[which(colnames(vri_full) %in% "SpeciesGroup")] <- "code_orig"
 vri_full <- merge(vri_full, lookup.spcd[lookup.spcd$file=="mig_birds_Layer_polyarea_forstandatts",], by="code_orig", all=T)
 vri_full2 <- vri_full[c(2:(ncol(vri_full)-2), 1,(ncol(vri_full)-1), ncol(vri_full))]
 
 write.table(vri_full2, file="data/FORSITE_all_regions__Nicoles_VRI_fields_fixednames-zSpGroup.csv", row.names=F, col.names=T, sep=",")
+```
+
+## File 6. vri_forsite.RData
+
+``` {r eval=T}
+load("cache/vri_forsite.RData")
+colnames(vri_forsite)[which(colnames(vri_forsite) %in% "SpeciesGroup")] <- "code_orig"
+vri_forsite <- merge(vri_forsite, lookup.spcd[lookup.spcd$file=="mig_birds_Layer_polyarea_forstandatts",], by="code_orig", all=T)
+vri_forsite_zSpGroup <- vri_forsite[c(2:(ncol(vri_forsite)-2), 1,(ncol(vri_forsite)-1), ncol(vri_forsite))]
+
+cache("vri_forsite_zSpGroup")
+
+kable(tail(vri_forsite[grep("code", colnames(vri_forsite))]))
 ```

@@ -1,14 +1,17 @@
 ---
-title: "00.02.MergeVRIIntersectFiles"
+title: "Extract Intersected VRI Data"
 author: "Nicole Barker"
-date: "Last run: Dec 14, 2017"
+date: "Last run: Dec 21, 2017"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
 ---
 
 ## Background
-On Nov 28, 2017, Trish sent me intersections between the latest avian data and the BC VRI dataset. 
+
+* On Nov 28, 2017, Trish sent me intersections between the latest avian data and the BC VRI dataset. 
+* In early- and mid-December, I cleaned up the VRI files and the bird files
+
 
 **FILES**
 
@@ -22,7 +25,8 @@ On Nov 28, 2017, Trish sent me intersections between the latest avian data and t
 In this script, I: 
 
 * Inspect each file independently for duplicates
-* Inspect the combind file for duplicates and make decision on which to exclude
+* Inspect the combined file for duplicates and make decision on which to exclude
+* Extract the FIXED VRI data from the full VRI file
 
 ``` {r setup, echo=F, message=F, warning=F}
 require(knitr)
@@ -35,9 +39,10 @@ load.project()
 options(digits=12)
 ```
 
-### Load datasets and look for duplicates among intersected datasets
+## Load datasets and look for duplicates within datasets
 
-#### First look for duplicates within datasets
+* Duplicate SS, indicating we might have the same data in the dataset twice
+* Duplicate location, indicating we might have data from the same surveys recorded under different survey names. 
 
 ##### 1. bc_atlas_ident.csv
 
@@ -162,7 +167,14 @@ kable(wsi.sm[wsi.sm$SS %in% wsi.sm$SS[duplicated(wsi.sm$SS)],], row.names=F)
 
 * No SS duplicated
 
-#### Next look for duplicates among datasets (i.e. after combining together)
+
+## Identify which columns I'll need to keep from these files to intersect with full VRI dataset
+
+I did some quality-checking and formatting in the full VRI dataset (i.e., complete attribute tables from the Forstie VRI and Canfor TFL shapefiles). To ensure I'm using the same corrected data, I'm going to subset that dataset for the sampled polygons. 
+
+This requires me to identify which polygons are associated with each bird point. 
+
+##### Add standard column names and index columns for which layers intersected which
 
 What are the various column names? 
 
@@ -171,20 +183,210 @@ all.dat.l <- list(atlas.sm, bam.sm, bbs.sm, canfortfl.sm, canfortflwsi.sm, wsi.s
 kable(as.data.frame(do.call(rbind,lapply(all.dat.l, colnames))))
 ```
 
+** Datasets intersecting Canfor TFL**
+
+``` {r rename.canfor}
+canfortfl$BirdLayer <- "XYBC_Natv4_TFLCanfor"
+canfortfl$VRIintersectLayer <- "Canfor_TFL_VRI"
+colnames(canfortfl)[grep(unique(canfortfl$BirdLayer), colnames(canfortfl))] <- "FID_BIRD"
+colnames(canfortfl)[grep(unique(canfortfl$VRIintersectLayer), colnames(canfortfl))] <- "FID_VRI"
+
+canfortflwsi$BirdLayer <- "XY_WSI_TFLCanfor"
+canfortflwsi$VRIintersectLayer <- "Canfor_TFL_VRI"
+colnames(canfortflwsi)[grep(unique(canfortflwsi$BirdLayer), colnames(canfortflwsi))] <- "FID_BIRD"
+colnames(canfortflwsi)[grep(unique(canfortflwsi$VRIintersectLayer), colnames(canfortflwsi))] <- "FID_VRI"
+```
+
+** Datasets intersecting Forsite VRI**
+
+``` {r rename.forsite}
+# ATLAS
+atlas$BirdLayer <- "BC_BCCA_SelectedMigLayer"
+atlas$VRIintersectLayer <- "Forsite_VRI"
+colnames(atlas)[grep(unique(atlas$BirdLayer), colnames(atlas))] <- "FID_BIRD"
+colnames(atlas)[grep("migratory_bird", colnames(atlas))] <- "FID_VRI"
+
+#BAM
+bam$BirdLayer <- "BCdatanat4"
+bam$VRIintersectLayer <- "Forsite_VRI"
+colnames(bam)[grep(unique(bam$BirdLayer), colnames(bam))] <- "FID_BIRD"
+colnames(bam)[grep("migratory_bird", colnames(bam))] <- "FID_VRI"
+
+# BBS
+bbs$BirdLayer <- "XYBC_BBS_v3"
+bbs$VRIintersectLayer <- "Forsite_VRI"
+colnames(bbs)[grep(unique(bbs$BirdLayer), colnames(bbs))] <- "FID_BIRD"
+colnames(bbs)[grep("migratory_bird", colnames(bbs))] <- "FID_VRI"
+
+# WSI
+wsi$BirdLayer <- "BAMNATV4BConly"
+wsi$VRIintersectLayer <- "Forsite_VRI"
+colnames(wsi)[grep(unique(wsi$BirdLayer), colnames(wsi))] <- "FID_BIRD"
+colnames(wsi)[grep("migratory_bird", colnames(wsi))] <- "FID_VRI"
+```
+
+
+
+#### First remove columns with all NAs so the dataset is more manageable size
+
+``` {r}
+cols_to_remove <- do.call(c, lapply(canfortfl, function(x) { #if column is only full of NAs, it returns a 0
+  sum(!is.na(unique(x)))
+}))
+
+cols_to_remove <- cols_to_remove[cols_to_remove == 0] # isolate columns that were full of NAs (returning 0)
+
+canfortfl_redcol <- canfortfl[-which(colnames(canfortfl) %in% names(cols_to_remove))]
+```
+
+#### Which are unique identifiers within the VRI datasets? 
+
+How many rows are there in the dataset? `nrow(canfortfl_redcol)` `r nrow(canfortfl_redcol)`
+
+How many unique IDs from the VRI file? `length(unique(canfortfl_redcol$FID_VRI))` `r length(unique(canfortfl_redcol$FID_VRI))`
+
+How many unique OBJECTIDs? `length(unique(canfortfl_redcol$OBJECTID))` `r length(unique(canfortfl_redcol$OBJECTID))`
+
+``` {r}
+demo <- canfortfl_redcol[canfortfl_redcol$FID_VRI %in% canfortfl_redcol[duplicated(canfortfl_redcol$FID_VRI),]$FID_VRI[1:15],]
+demo <- demo[order(demo$FID_VRI),]
+kable(demo[c("FID_VRI", "OBJECTID", "FID_BIRD", "SS")], row.names=F)
+```
+
+**NOTES**
+
+* OBJECTID: appears to be a row indicator. 
+* FID_VRI: appears to be a polygon indicator, indicating the unique polygon within the Canfor VRI file
+
+Next step is to double-check that the FID_VRI values are consistent when exported from the full VRI file vs. this intersected one. To make sure I can join on them.
+
+
+#### Load Full dataset from Canfor TFL VRI 
+``` {r}
+load("cache/vri_canfortfl_postclean.RData")
+vri_canfortfl <- vri_canfortfl_postclean; rm(vri_canfortfl_postclean)
+
+vri_canfor_redcol <- vri_canfortfl[-which(colnames(vri_canfortfl) %in% names(cols_to_remove))]
+``` 
+
+Compare where FID_VRI in intersected file is the same as OBJECTID in the full VRI file
+``` {r}
+FIDs_examine <- unique(canfortfl_redcol$FID_VRI)[unique(canfortfl_redcol$FID_VRI) %in% unique(vri_canfor_redcol$OBJECTID)] # where canforintersect:FID_VRI == fullcanfortfl:OBJECTID
+
+intersect_FIDS <- canfortfl_redcol[canfortfl_redcol$FID_VRI %in% FIDs_examine,]
+intersect_FIDS <- intersect_FIDS[c("FID_VRI", "MAP_ID", "PROJECTED_DATE", "SPECIES_CD_1", "HARVEST_DATE")]
+intersect_FIDS <- intersect_FIDS[!duplicated(intersect_FIDS),]
+intersect_FIDS <- intersect_FIDS[order(intersect_FIDS$FID_VRI),]
+
+vri_canfor_FIDS <- vri_canfor_redcol[vri_canfor_redcol$OBJECTID %in% FIDs_examine,c("OBJECTID", "MAP_ID", "PROJECTED_DATE", "SPECIES_CD_1", "HARVEST_DATE")]
+vri_canfor_FIDS <- vri_canfor_FIDS[order(vri_canfor_FIDS$OBJECTID),]
+
+kable(rbind(head(vri_canfor_FIDS), tail(vri_canfor_FIDS)), row.names=F)
+kable(rbind(head(intersect_FIDS), tail(intersect_FIDS)), row.names=F)
+```
+
+** CONCLUSION**
+
+* Looks like **YES**, OBJECTID from full VRI file is the same unique identifier as FID_VRI
+* This is perhaps obvious to some people, but I didn't do the GIS queries, so I needed to double-check for my own peace of mind. 
+
+** Next Steps**
+
+* Double-check the same is true for the Forsite VRI file and not just the Canfor one
+
+``` {r clean1}
+rm(list=ls())
+gc()
+```
+
+#### Load Full dataset from Forsite VRI 
+
+``` {r}
+load("cache/vri_forsite_postclean.RData")
+vri_forsite <- vri_forsite_postclean; rm(vri_forsite_postclean)
+```
+
+##### Subset full VRI dataset for those FEATURE_ID in the bird-intersected VRI files. 
+
+``` {r}
+atlas <- read.csv("data/bc_atlas_ident.csv", header=T)
+atlas <- atlas[order(atlas$FEATURE_ID),]
+
+vri_forsite_intersectIDs <- vri_forsite[vri_forsite$FEATURE_ID %in% atlas$FEATURE_ID,] #subset for those polygons intersected by atlas points.
+vri_forsite_intersectIDs <- vri_forsite_intersectIDs[order(vri_forsite_intersectIDs$FEATURE_ID),] #reorder
+```
+
+##### Check for consistency between two datasets
+
+``` {r}
+cols_to_check <- c("FEATURE_ID", "SpeciesGroup", "PROJ_AGE_1", "PROJ_HEIGHT_1")
+
+vri_forsite_intersectIDs <- vri_forsite_intersectIDs[cols_to_check]
+atlas <- atlas[cols_to_check]
+
+kable(head(vri_forsite_intersectIDs), row.names=F )
+kable(head(atlas), row.names=F )
+```
+
+**NOTES**
+
+* So FEATURE_ID seems to be good for combining the various Forsite_VRI intersected files with the full forsite_FRI file. This is reasonable since we already determined that FEATURE_ID is a unique polygon identifier. 
+
+** Next Steps **
+
+* Before extracting out the intersected IDs to make the final intersected file, I want to do some more quality-checking to identify possible duplicates among the various bird-VRI intersection datasets
+
+
+## Look for duplicates among datasets (i.e. after combining together)
+
 What are the possible duplication scenarios? 
 
-* SS duplicated and intersected FID is the same: suggests the SS was represented in multiple of the avian datasets and intersected with the same VRI dataset twice
-* SS duplicated but intersected FID is different: same SS was intersected with multiple polygons (e.g., from different VRI shapefiles)
-* FID duplicated for different SS: multiple survey stations intersected the same polygon
-* Need to also check for possibility that FIDs are different for the same polygons b/c they're represented in different shapefile layers. Perhaps I need to use a different column as the polygon ID.
+1.  SS duplicated and intersected FID is the same: suggests the SS was represented in multiple of the avian datasets and intersected with the same VRI dataset twice
+2. SS duplicated but intersected FID is different: same SS was intersected with multiple polygons (e.g., from different VRI shapefiles)
+3.  FID duplicated for different SS: multiple survey stations intersected the same polygon
+4. Need to also check for possibility that FIDs are different for the same polygons b/c they're represented in different shapefile layers. Perhaps I need to use a different column as the polygon ID.
 
-##### Combine datasets intersecting Canfor dataset
 
-``` {r combine.canfortfl.datasets}
-colnames(canfortfl.sm)[1]    <- "FID_BIRD"
-colnames(canfortflwsi.sm)[1] <- "FID_BIRD"
+#### Re-load and combine intersected datasets 
 
-canfordat <- rbind(canfortfl.sm, canfortflwsi.sm)
+
+**FILES**
+
+1. BC_CanforTFLvri_bampointsIdent.csv
+2. BC_CanforTFLvri_WSI.csv
+3. bc_atlas_ident.csv
+4. bcBAM_noAtlas_ident.csv
+5. bcbbs_ident.csv
+6. bcwsi_ident.csv
+
+``` {r }
+cols_to_keep <- c("VRIintersectLayer","FID_VRI", "BirdLayer", "FID_BIRD", "PCODE", "SS", "FEATURE_ID") #columns I want from all bird-intersected VRI data
+```
+
+** Datasets intersecting Canfor TFL**
+``` {r}
+canfortfl <- read.csv("data/BC_CanforTFLvri_bampointsIdent.csv", header=T)
+canfortflwsi <- read.csv("data/BC_CanforTFLvri_WSI.csv", header=T)
+
+canfortfl$BirdLayer <- "XYBC_Natv4_TFLCanfor"
+canfortfl$VRIintersectLayer <- "Canfor_TFL_VRI"
+colnames(canfortfl)[grep(unique(canfortfl$BirdLayer), colnames(canfortfl))] <- "FID_BIRD"
+colnames(canfortfl)[grep(unique(canfortfl$VRIintersectLayer), colnames(canfortfl))] <- "FID_VRI"
+canfortfl$FEATURE_ID <- "NA" #create this columns so can rbind with forsite-intersected
+canfortfl_redcol <- canfortfl[colnames(canfortfl) %in% cols_to_keep]
+
+canfortflwsi$BirdLayer <- "XY_WSI_TFLCanfor"
+canfortflwsi$VRIintersectLayer <- "Canfor_TFL_VRI"
+colnames(canfortflwsi)[grep(unique(canfortflwsi$BirdLayer), colnames(canfortflwsi))] <- "FID_BIRD"
+colnames(canfortflwsi)[grep(unique(canfortflwsi$VRIintersectLayer), colnames(canfortflwsi))] <- "FID_VRI"
+canfortflwsi$FEATURE_ID <- "NA"#create this columns so can rbind with forsite-intersected
+canfortflwsi_redcol <- canfortflwsi[colnames(canfortflwsi) %in% cols_to_keep]
+```
+
+Combine
+
+``` {r}
+canfordat <- rbind(canfortfl_redcol, canfortflwsi_redcol)
 
 sum(duplicated(canfordat$SS))
 ```
@@ -194,12 +396,44 @@ sum(duplicated(canfordat$SS))
 * No duplicated SS here. 
 
 ##### Combine datasets intersecting Forsite dataset
+#### Combine datasets intersecting Forsite VRI dataset
+
+```
+atlas <- read.csv("data/bc_atlas_ident.csv", header=T)
+bam <- read.csv("data/bcBAM_noAtlas_ident.csv", header=T)
+bbs <- read.csv("data/bcbbs_ident.csv", header=T)
+wsi <- read.csv("data/bcwsi_ident.csv", header=T)
+** Datasets intersecting Forsite VRI**
+
+``` {r rename.forsite}
+# ATLAS
+atlas$BirdLayer <- "BC_BCCA_SelectedMigLayer"
+atlas$VRIintersectLayer <- "Forsite_VRI"
+colnames(atlas)[grep(unique(atlas$BirdLayer), colnames(atlas))] <- "FID_BIRD"
+colnames(atlas)[grep("migratory_bird", colnames(atlas))] <- "FID_VRI"
+
+#BAM
+bam$BirdLayer <- "BCdatanat4"
+bam$VRIintersectLayer <- "Forsite_VRI"
+colnames(bam)[grep(unique(bam$BirdLayer), colnames(bam))] <- "FID_BIRD"
+colnames(bam)[grep("migratory_bird", colnames(bam))] <- "FID_VRI"
+
+# BBS
+bbs$BirdLayer <- "XYBC_BBS_v3"
+bbs$VRIintersectLayer <- "Forsite_VRI"
+colnames(bbs)[grep(unique(bbs$BirdLayer), colnames(bbs))] <- "FID_BIRD"
+colnames(bbs)[grep("migratory_bird", colnames(bbs))] <- "FID_VRI"
+
+# WSI
+wsi$BirdLayer <- "BAMNATV4BConly"
+wsi$VRIintersectLayer <- "Forsite_VRI"
+colnames(wsi)[grep(unique(wsi$BirdLayer), colnames(wsi))] <- "FID_BIRD"
+colnames(wsi)[grep("migratory_bird", colnames(wsi))] <- "FID_VRI"
+```
+
+
 
 ``` {r combine.forsite.datasets}
-colnames(atlas.sm)[1] <- "FID_BIRD"
-colnames(bam.sm)[1]   <- "FID_BIRD"
-colnames(bbs.sm)[1]   <- "FID_BIRD"
-colnames(wsi.sm)[1]   <- "FID_BIRD"
 
 forsitedat <- rbind(atlas.sm, bam.sm, bbs.sm, wsi.sm)
 
@@ -281,33 +515,10 @@ kable(rbind(head(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "TFL48
     * ACTION: Choose CanforTFL intersection for these. Identify them by looking for a null value in either SPECIES_CD_1, BEC_ZONE_CODE, PROJ_AGE_1, or PROJ_HEIGHT_1.
 
 
-### Focus on Distance to Nearest polygon/stand edge
+### Combine the various datasets 
 
-Because we're working with two different VRI shapefiles, some of the point count SSs will have two distances to nearest polygons.. one from the CanforTFL and one from the Forsite "mig birds" VRI file. 
-
-![ ^^^ Image. Example for SS BL2TFL48:Block2:59 and distance to edge to both the CanforTFL layer and the Forsite mig birds layer. NEAR_FID refers to the OBJECT_ID in the polyline shapefile for the VRI shapefiles](../output/DistanceToEdgeExample.jpg)
-
-Here I need to identify those and save only the shortest distance. 
-
-Add layer name to each file 
-
-``` {r}
-atlas$OrigLayer <- "BC_BCCA_SelectedMigLayer"
-bam$OrigLayer <- "BCdatanat4"
-bbs$OrigLayer <- "XYBC_BBS_v3"
-canfortfl$OrigLayer <- "XYBC_Natv4_TFLCanfor"
-canfortflwsi$OrigLayer <- "XY_WSI_TFLCanfor"
-wsi$OrigLayer <- "BAMNATV4BConly"
-
-atlas$VRIintersectLayer <- "Forsite_VRI"
-bam$VRIintersectLayer <- "Forsite_VRI"
-bbs$VRIintersectLayer <- "Forsite_VRI"
-canfortfl$VRIintersectLayer <- "Canfor_TFL_VRI"
-canfortflwsi$VRIintersectLayer <- "Canfor_TFL_VRI"
-wsi$VRIintersectLayer <- "Forsite_VRI"
-
-
-```
+* Remove Canfor TFL Duplicates
+* Subset to the rows where we have attributes for all needed columns
 
 Change colnames to standard ones
 ``` {r}
@@ -319,77 +530,6 @@ colnames(canfortflwsi)[c(2,12)] <- c("FID_BIRD", "FID_VRI")
 colnames(wsi)[c(2,12)] <- c("FID_BIRD", "FID_VRI")
 ```
 
-``` {r}
-neededcols2 <- c('SS', 'FID_BIRD', 'FID_VRI', 'VRIintersectLayer', "PCODE", "NEAR_FID", "NEAR_DIST")
-  
-alldat.fordisttoedge <- rbind(atlas[neededcols2], bam[neededcols2], bbs[neededcols2], wsi[neededcols2], canfortfl[neededcols2], canfortflwsi[neededcols2])
-```
-
-`r sum(duplicated(alldat.fordisttoedge$SS))` duplicated SSs. 
-
-
-``` {r}
-dupSS <- alldat.fordisttoedge$SS[duplicated(alldat.fordisttoedge$SS)]
-
-alldat.fordisttoedge.nodups <-  alldat.fordisttoedge[!alldat.fordisttoedge$SS %in% dupSS,]
-alldat.fordisttoedge.dups <-  alldat.fordisttoedge[alldat.fordisttoedge$SS %in% dupSS,]
-
-alldat.fordisttoedge.dups <- alldat.fordisttoedge.dups[order(alldat.fordisttoedge.dups$SS, alldat.fordisttoedge.dups$NEAR_DIST, decreasing = T),]
-
-sampleSS <- sample(dupSS, 30)
-
-kable(alldat.fordisttoedge.dups[alldat.fordisttoedge.dups$SS %in% sampleSS,], row.names=F)
-```
-
-``` {r}
-unique(alldat.fordisttoedge.dups$PCODE) # which projects have two distance measurements? 
-```
-
-Only data that fall within the Canfor TFL have duplicate distance to edges. This is because Trish ran distnace to edge for these point counts twice... once as part of the full intersection with the Forsite VRI... and once with just the Canfor TFL. She didn't remove the one set, so they're duplicated. 
-
-This also explains the duplication detected above, and why almost all of the duplicates fell within the Canfor TFL. 
-
-
-Question to self: if I were to isolate the second version of each SS after sorting in decreasing order by distance to edge, would it consistently pull from the correct database (e.g., Canfor = smaller distance)
-
-``` {r}
-test <- alldat.fordisttoedge.dups[alldat.fordisttoedge.dups$SS %in% sampleSS,]
-
-test[duplicated(test$SS),] 
-```
-
-Looks like yes, but maybe I should just cut out the duplicates based on combination of PCODE and the VRI file. This would omit point counts from within the Canfor TFL that were intersected with the Forsite mig birds layer. 
-
-
-### Combine the various datasets 
-
-* Remove Canfor TFL Duplicates
-* Subset to the rows where we have attributes for all needed columns
-
-
-Add blank derived columns to the CanforTFL dataset so that I can include those columns from the Forsite file
-
-``` {r}
-canfortfl$BecZone <- NA                 
-canfortfl$SpeciesGroup <- NA
-canfortfl$Age <- NA
-canfortfl$Height <- NA
-canfortfl$Rank <- NA
-canfortfl$FD_PERCENT <- NA
-canfortfl$PL_PERCENT <- NA
-canfortfl$AT_PERCENT <- NA
-canfortfl$Decid_PERCENT <- NA
-
-canfortflwsi$BecZone <- NA                 
-canfortflwsi$SpeciesGroup <- NA
-canfortflwsi$Age <- NA
-canfortflwsi$Height <- NA
-canfortflwsi$Rank <- NA
-canfortflwsi$FD_PERCENT <- NA
-canfortflwsi$PL_PERCENT <- NA
-canfortflwsi$AT_PERCENT <- NA
-canfortflwsi$Decid_PERCENT <- NA
-```
 
 ``` {r}
 neededcols <- c('PCODE', 'SS', 'FID_BIRD', 'FID_VRI', 'VRIintersectLayer', 'MAP_ID', 'POLYGON_ID', 'OPENING_IND', 'INPUT_DATE', 'INTERPRETATION_DATE', 'ATTRIBUTION_BASE_DATE', 'REFERENCE_YEAR',  'REFERENCE_DATE',  'PROJECTED_DATE', 'EARLIEST_NONLOGGING_DIST_DATE', 'HARVEST_DATE', 'PROJECT', 'BEC_ZONE_CODE', 'BEC_SUBZONE', 'BEC_VARIANT', 'BEC_PHASE', 'EARLIEST_NONLOGGING_DIST_TYPE',  'STAND_PERCENTAGE_DEAD', 'FREE_TO_GROW_IND',  'INTERPRETED_DATA_SRC_CD', 'CROWN_CLOSURE', 'VRI_LIVE_STEMS_PER_HA', 'DATA_SRC_VRI_LIVE_STEM_HA_CD', 'VRI_DEAD_STEMS_PER_HA', 'TREE_COVER_PATTERN', 'VERTICAL_COMPLEXITY', 'SPECIES_CD_1', 'SPECIES_PCT_1', 'SPECIES_CD_2', 'SPECIES_PCT_2', 'SPECIES_CD_3', 'SPECIES_PCT_3', 'SPECIES_CD_4', 'SPECIES_PCT_4', 'SPECIES_CD_5', 'SPECIES_PCT_5', 'SPECIES_CD_6', 'SPECIES_PCT_6', 'PROJ_AGE_1', 'PROJ_AGE_CLASS_CD_1', 'PROJ_AGE_2', 'PROJ_AGE_CLASS_CD_2', 'DATA_SOURCE_AGE_CD', 'PROJ_HEIGHT_1', 'PROJ_HEIGHT_CLASS_CD_1', 'PROJ_HEIGHT_2', 'PROJ_HEIGHT_CLASS_CD_2', 'DATA_SOURCE_HEIGHT_CD', 'BecZone', 'SpeciesGroup', 'Age', 'Height', 'Rank', 'FD_PERCENT', 'PL_PERCENT', 'AT_PERCENT', 'Decid_PERCENT', 'NEAR_FID', 'NEAR_DIST')
