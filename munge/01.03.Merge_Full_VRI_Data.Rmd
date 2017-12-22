@@ -119,16 +119,43 @@ vri_both <- rbind(vri_canfortfl2, vri_forsite2)
 
 ### Date pre-processing
 
-``` {r, warning=F, message=F}
+``` {r}
+# function to extract year from date columns
 F.convertdate.extractyear <- function(x){
   dates <- as.Date(unlist(lapply(strsplit(as.character(x), " "), function(y) {y[1]})), format="%m/%d/%Y")
   years <- format(dates,'%Y')
 }
+```
 
+
+Compare Reference Year to Reference Date
+``` {r}
+vri_both$ReferenceYear <- F.convertdate.extractyear(vri_both$REFERENCE_DATE) #take year from reference Date if it's available
+
+refdate_year <- vri_both[c("REFERENCE_DATE", "REFERENCE_YEAR", "ReferenceYear")]
+refdate_year <- refdate_year[!is.na(refdate_year$REFERENCE_YEAR),] #remove rows where supplied Reference Year is blank
+
+kable(head(refdate_year[is.na(refdate_year$ReferenceYear),]), row.names=F)
+```
+
+Some polygons have reference year even if they don't have reference date.
+
+Now to check if reference date and reference year have the same year if they're both provided. 
+
+``` {r}
+refdate_year2 <- refdate_year[!is.na(refdate_year$ReferenceYear),]
+refdate_year2$DATE_YEAR_same <- refdate_year2$REFERENCE_YEAR != refdate_year2$ReferenceYear #return true if provided and calculated years are different
+sum(refdate_year2$DATE_YEAR_same) # for how many rows was my statement TRUE
+```
+
+* If the REFERENCE_DATE is provided, it is the same year as REFERENCE_YEAR.
+* Therefore, I can simply use REFERENCE_YEAR instead of calculating it. 
+
+``` {r, warning=F, message=F}
 vri_both$InputYear <- F.convertdate.extractyear(vri_both$INPUT_DATE)
 vri_both$ProjectedYear <- F.convertdate.extractyear(vri_both$PROJECTED_DATE)
 vri_both$InterpretYear <- F.convertdate.extractyear(vri_both$INTERPRETATION_DATE)
-vri_both$ReferenceYear <- F.convertdate.extractyear(vri_both$REFERENCE_DATE)
+vri_both$ReferenceYear <- vri_both$REFERENCE_YEAR
 vri_both$AttributionYear <- F.convertdate.extractyear(vri_both$ATTRIBUTION_BASE_DATE)
 vri_both$DistYear_Nonlog <- F.convertdate.extractyear(vri_both$EARLIEST_NONLOGGING_DIST_DATE)
 vri_both$DistYear_Log <- F.convertdate.extractyear(vri_both$HARVEST_DATE)
@@ -139,7 +166,9 @@ vri_both$DisturbanceYear <- apply(vri_both[c("DistYear_Nonlog", "DistYear_Log")]
 
 ``` {r}
 ageclassbreaks <- c(0, 3, 30, 80, 120, 250, 1000)
-vri_both$AgeClass_calc <- cut(vri_both$PROJ_AGE_1, breaks = ageclassbreaks, include.lowest = TRUE, labels = c("0-3 yrs", "3-30 yrs", "31-80 yrs", "81-120 yrs", "121-250 yrs", ">250 yrs"))
+vri_both$AgeClass_calc <- cut(vri_both$PROJ_AGE_1, breaks = ageclassbreaks, include.lowest = TRUE, labels = c("0-2 yrs", "3-30 yrs", "31-80 yrs", "81-120 yrs", "121-250 yrs", ">250 yrs"))
+
+vri_both$AgeClass_calc <- ordered(vri_both$AgeClass_calc) # make an ordered factor
 
 kable(rbind(head(vri_both[c("PROJ_AGE_1", "AgeClass_calc", "VRI_Layer")]),
             tail(vri_both[c("PROJ_AGE_1", "AgeClass_calc", "VRI_Layer")])))
@@ -150,6 +179,8 @@ kable(rbind(head(vri_both[c("PROJ_AGE_1", "AgeClass_calc", "VRI_Layer")]),
 ``` {r}
 heightclassbreaks <- c(0, 10.5, 19.5, 28.5, 100)
 vri_both$HeightClass_calc <- cut(vri_both$PROJ_HEIGHT_1, breaks = heightclassbreaks, include.lowest = TRUE, labels = c("<10.5 m", "10.5-19.4 m", "19.5-28.4 m", "> 28.5 m"))
+
+vri_both$HeightClass_calc <- ordered(vri_both$HeightClass_calc) # make an ordered factor
 
 kable(rbind(head(vri_both[c("PROJ_HEIGHT_1", "HeightClass_calc", "VRI_Layer")]),
             tail(vri_both[c("PROJ_HEIGHT_1", "HeightClass_calc", "VRI_Layer")])))

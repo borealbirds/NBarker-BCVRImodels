@@ -1,11 +1,15 @@
 ---
 title: "Extract Intersected VRI Data"
 author: "Nicole Barker"
-date: "Last run: Dec 21, 2017"
+date: "Last run: Dec 22, 2017"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
 ---
+
+## Script Abstract
+Check for duplicates and errors within the bird-intersected VRI data. Identify which columns are unique polygon/stand identifiers in the full VRI file and which can be used to intersect with the bird-intersected versions of the VRI dataset. Extract the corrected VRI data out of the full-VRI dataset based on the polygon identifiers intersected by bird data. Cache the full dataset and the one split into Canfor and Forsite as RData files.
+
 
 ## Background
 
@@ -602,6 +606,38 @@ intersect_both <- rbind(intersect_canfor[-which(colnames(intersect_canfor) %in% 
 nrow(intersect_both)
 colnames(intersect_both)
 ```
+
+
+## Remove subsets of intersected data I don't want
+
+Stands where we're missing information I need for modelling
+
+* No age; PROJ_AGE_1 == NA
+* No height; PROJ_HEIGHT_1 == 0 or NA
+* 
+
+#### Check age = NA
+
+``` {r}
+nrow(intersect_both[is.na(intersect_both$PROJ_AGE_1),])
+head(intersect_both[is.na(intersect_both$PROJ_AGE_1),])
+```
+
+** NOTES**
+
+* I explored in the shapefile to see why a stand might have some information (e.g., years, BecZones, etc) but other information missing (SPECIES_CD all NA; PROJ age and PROJ height all NA)
+* Some stands had non productive descriptors or codes
+* Others appeared to be national parks
+
+``` {r}
+table(intersect_both$NON_PRODUCTIVE_DESCRIPTOR_CD[is.na(intersect_both$PROJ_AGE_1)])
+```
+
+
+
+nrow(intersect_both[intersect_both$PROJ_AGE_1 %in% 0,])
+Well actually age = 0 isn't missing information. It could indicate non-forested stands. e.g., non_productive_code = OR means the polygon is open range. This could still be useful for modelling bird densities...  
+
 
 ##### Cache all three versions
 ``` {r}

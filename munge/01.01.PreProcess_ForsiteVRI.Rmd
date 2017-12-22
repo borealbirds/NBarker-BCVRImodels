@@ -40,9 +40,28 @@ This is an export of the attribute table from "M:\DataStuff\SpatialData\Vegetati
 
 The "fixednames" is because the table exported with incomplete field names. This was fixed in a previous iteration of analyses, so I don't need to repeat it now. 
 
+``` {r, eval=F}
+vri_forsite_allfields <- read.csv("data/migratory_bird_BAMused.txt", header=T)
+cache("vri_forsite_allfields")
+
+cols_to_remove <- colnames(vri_forsite_allfields)[grep("DEAD_VOL", colnames(vri_forsite_allfields))]
+cols_to_remove <- c(cols_to_remove, colnames(vri_forsite_allfields)[grep("LIVE_VOL", colnames(vri_forsite_allfields))])
+cols_to_remove <- c(cols_to_remove, colnames(vri_forsite_allfields)[grep("BIOMASS", colnames(vri_forsite_allfields))])
+cols_to_remove <- c(cols_to_remove, colnames(vri_forsite_allfields)[grep("LINE_", colnames(vri_forsite_allfields))])
+cols_to_remove <- c(cols_to_remove, colnames(vri_forsite_allfields)[grep("LABEL_", colnames(vri_forsite_allfields))])
+cols_to_remove <- c(cols_to_remove, colnames(vri_forsite_allfields)[grep("STAND_VOL", colnames(vri_forsite_allfields))])
+cols_to_remove <- c(cols_to_remove, colnames(vri_forsite_allfields)[grep("CRUISE", colnames(vri_forsite_allfields))])
+cols_to_remove <- c(cols_to_remove, colnames(vri_forsite_allfields)[grep("LABEL", colnames(vri_forsite_allfields))])
+cols_to_remove <- c(cols_to_remove, colnames(vri_forsite_allfields)[grep("QUAD", colnames(vri_forsite_allfields))])
+
+vri_forsite_mostfields <- vri_forsite_allfields[-which(colnames(vri_forsite_allfields) %in% cols_to_remove)]
+cache("vri_forsite_mostfields")
+```
+
 ``` {r}
-vri_forsite <- read.csv("data/FORSITE_all_regions__Nicoles_VRI_fields_fixednames.csv", header=T)
-kable(data.frame(ColNames=colnames(vri_forsite)))
+load("cache/vri_forsite_mostfields.RData")
+kable(data.frame(ColNames=colnames(vri_forsite_mostfields)))
+vri_forsite <- vri_forsite_mostfields;rm(vri_forsite_mostfields)
 ```
 
 #### Initial exploration to understand the format of the shapefile attribute table

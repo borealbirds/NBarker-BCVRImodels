@@ -37,6 +37,11 @@ Temporal alignment
 Distance to edge. 
 
 
+Then SRC 
+* rank description (need to rerun after I cleaned up ranks  from shapefile)
+* sampling representation after filtering temporal representation. 
+
+
 
 
 
