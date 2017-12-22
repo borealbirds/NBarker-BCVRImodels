@@ -271,7 +271,7 @@ vri_canfor_redcol <- vri_canfortfl[-which(colnames(vri_canfortfl) %in% names(col
 
 Compare where FID_VRI in intersected file is the same as OBJECTID in the full VRI file
 ``` {r}
-FIDs_examine <- unique(canfortfl_redcol$FID_VRI)[unique(canfortfl_redcol$FID_VRI) %in% unique(vri_canfor_redcol$OBJECTID)] # where canforintersect:FID_VRI == fullcanfortfl:OBJECTID
+FIDs_examine <- unique(canfortfl_redcol$FID_VRI)[unique(canfortfl_redcol$FID_VRI) %in% unique(vri_canfor_redcol$OBJECTID)] # where intersect_canfor:FID_VRI == fullcanfortfl:OBJECTID
 
 intersect_FIDS <- canfortfl_redcol[canfortfl_redcol$FID_VRI %in% FIDs_examine,]
 intersect_FIDS <- intersect_FIDS[c("FID_VRI", "MAP_ID", "PROJECTED_DATE", "SPECIES_CD_1", "HARVEST_DATE")]
@@ -395,50 +395,52 @@ sum(duplicated(canfordat$SS))
 
 * No duplicated SS here. 
 
-##### Combine datasets intersecting Forsite dataset
-#### Combine datasets intersecting Forsite VRI dataset
+** Datasets intersecting Forsite VRI**
 
-```
+``` {r}
 atlas <- read.csv("data/bc_atlas_ident.csv", header=T)
 bam <- read.csv("data/bcBAM_noAtlas_ident.csv", header=T)
 bbs <- read.csv("data/bcbbs_ident.csv", header=T)
 wsi <- read.csv("data/bcwsi_ident.csv", header=T)
-** Datasets intersecting Forsite VRI**
 
-``` {r rename.forsite}
 # ATLAS
 atlas$BirdLayer <- "BC_BCCA_SelectedMigLayer"
 atlas$VRIintersectLayer <- "Forsite_VRI"
 colnames(atlas)[grep(unique(atlas$BirdLayer), colnames(atlas))] <- "FID_BIRD"
 colnames(atlas)[grep("migratory_bird", colnames(atlas))] <- "FID_VRI"
+atlas_redcol <- atlas[colnames(atlas) %in% cols_to_keep]
 
 #BAM
 bam$BirdLayer <- "BCdatanat4"
 bam$VRIintersectLayer <- "Forsite_VRI"
 colnames(bam)[grep(unique(bam$BirdLayer), colnames(bam))] <- "FID_BIRD"
 colnames(bam)[grep("migratory_bird", colnames(bam))] <- "FID_VRI"
+bam_redcol <- bam[colnames(bam) %in% cols_to_keep]
 
 # BBS
 bbs$BirdLayer <- "XYBC_BBS_v3"
 bbs$VRIintersectLayer <- "Forsite_VRI"
 colnames(bbs)[grep(unique(bbs$BirdLayer), colnames(bbs))] <- "FID_BIRD"
 colnames(bbs)[grep("migratory_bird", colnames(bbs))] <- "FID_VRI"
+bbs_redcol <- bbs[colnames(bbs) %in% cols_to_keep]
 
 # WSI
 wsi$BirdLayer <- "BAMNATV4BConly"
 wsi$VRIintersectLayer <- "Forsite_VRI"
 colnames(wsi)[grep(unique(wsi$BirdLayer), colnames(wsi))] <- "FID_BIRD"
 colnames(wsi)[grep("migratory_bird", colnames(wsi))] <- "FID_VRI"
+wsi_redcol <- wsi[colnames(wsi) %in% cols_to_keep]
 ```
 
+Combine
 
-
-``` {r combine.forsite.datasets}
-
-forsitedat <- rbind(atlas.sm, bam.sm, bbs.sm, wsi.sm)
+``` {r}
+forsitedat <- rbind(atlas_redcol, bam_redcol, bbs_redcol, wsi_redcol)
 
 sum(duplicated(forsitedat$SS))
+
 kable(forsitedat[forsitedat$SS %in% forsitedat$SS[duplicated(forsitedat$SS)],], row.names=F)
+
 ```
 
 **NOTES**
@@ -448,13 +450,15 @@ kable(forsitedat[forsitedat$SS %in% forsitedat$SS[duplicated(forsitedat$SS)],], 
 ##### Combine Canfor TFL & Forsite datasets
 
 ``` {r combine.all.datasets}
-colnames(canfordat)[4] <- "FID_VRI"
-colnames(forsitedat)[4] <- "FID_VRI"
-alldat.sm <- rbind(canfordat, forsitedat)
+alldat <- rbind(canfordat, forsitedat)
 
-sum(duplicated(alldat.sm$SS))
-dupSS <- alldat.sm$SS[duplicated(alldat.sm$SS)]
+sum(duplicated(alldat$SS))
+dupSS <- alldat$SS[duplicated(alldat$SS)]
+``` 
 
+There are `r length(dupSS)` duplicate SS after merging the SSs intersecting Canfor data with those intersecting the Forsite VRI dataset
+
+``` {r}
 kable(canfordat[canfordat$SS %in% dupSS[10:30],], row.names=F)
 kable(forsitedat[forsitedat$SS %in% dupSS[10:30],], row.names=F)
 ```
@@ -462,20 +466,20 @@ kable(forsitedat[forsitedat$SS %in% dupSS[10:30],], row.names=F)
 Which PCODEs are represented in the duplicated SS?
 
 ``` {r}
-sort(as.character(unique(alldat.sm$PCODE[which(alldat.sm$SS %in% dupSS)])))
+sort(as.character(unique(alldat$PCODE[which(alldat$SS %in% dupSS)])))
 ```
 
 **BCCA**
 ``` {r}
-kable(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "BCCA",], row.names=F)
+kable(alldat[alldat$SS %in% dupSS & alldat$PCODE %in% "BCCA",], row.names=F)
 ```
 
 * BCCA: 3 SS duplicated. Same three I expected before. 
 
 **BL2TFL48**
 ``` {r}
-kable(rbind(head(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "BL2TFL48",], 10),
-            tail(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "BL2TFL48",], 10)), row.names=F)
+kable(rbind(head(alldat[alldat$SS %in% dupSS & alldat$PCODE %in% "BL2TFL48",], 10),
+            tail(alldat[alldat$SS %in% dupSS & alldat$PCODE %in% "BL2TFL48",], 10)), row.names=F)
 ```
 
 ![ ^^^ Image. Example for PCODE BL2TFL48](../output/BL2TFL48.jpg)
@@ -485,8 +489,8 @@ kable(rbind(head(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "BL2TF
 
 **CF**
 ``` {r}
-kable(rbind(head(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "CF",], 10),
-            tail(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "CF",], 10)), row.names=F)
+kable(rbind(head(alldat[alldat$SS %in% dupSS & alldat$PCODE %in% "CF",], 10),
+            tail(alldat[alldat$SS %in% dupSS & alldat$PCODE %in% "CF",], 10)), row.names=F)
 ```
 
 ![ ^^^ Image. Example for SS CF.Murray.38 ](../output/CF.Murray.38.jpg)
@@ -497,8 +501,8 @@ kable(rbind(head(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "CF",]
 
 **CW**
 ``` {r}
-kable(rbind(head(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "CW",], 10),
-            tail(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "CW",], 10)), row.names=F)
+kable(rbind(head(alldat[alldat$SS %in% dupSS & alldat$PCODE %in% "CW",], 10),
+            tail(alldat[alldat$SS %in% dupSS & alldat$PCODE %in% "CW",], 10)), row.names=F)
 ```
 
 * CW: Same as for CF and BL2TFL48: stations intersect polygons in Forsite's shapefile that are missing key information, such as SpeciesGroup, resulting in NULL RANK.
@@ -507,8 +511,8 @@ kable(rbind(head(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "CW",]
 
 **TFL48VM**
 ``` {r}
-kable(rbind(head(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "TFL48VM",], 10),
-            tail(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "TFL48VM",], 10)), row.names=F)
+kable(rbind(head(alldat[alldat$SS %in% dupSS & alldat$PCODE %in% "TFL48VM",], 10),
+            tail(alldat[alldat$SS %in% dupSS & alldat$PCODE %in% "TFL48VM",], 10)), row.names=F)
 ```
 
 * TFL48VM: Same as for CW, CF, and BL2TFL48: stations intersect polygons in Forsite's shapefile that are missing key information, such as SpeciesGroup, resulting in NULL RANK.
@@ -520,74 +524,91 @@ kable(rbind(head(alldat.sm[alldat.sm$SS %in% dupSS & alldat.sm$PCODE %in% "TFL48
 * Remove Canfor TFL Duplicates
 * Subset to the rows where we have attributes for all needed columns
 
-Change colnames to standard ones
-``` {r}
-colnames(atlas)[c(2,8)] <- c("FID_BIRD", "FID_VRI")
-colnames(bam)[c(2,15)] <- c("FID_BIRD", "FID_VRI")
-colnames(bbs)[c(2,18)] <- c("FID_BIRD", "FID_VRI")
-colnames(canfortfl)[c(2, 15)] <- c("FID_BIRD", "FID_VRI")
-colnames(canfortflwsi)[c(2,12)] <- c("FID_BIRD", "FID_VRI")
-colnames(wsi)[c(2,12)] <- c("FID_BIRD", "FID_VRI")
-```
 
-
-``` {r}
-neededcols <- c('PCODE', 'SS', 'FID_BIRD', 'FID_VRI', 'VRIintersectLayer', 'MAP_ID', 'POLYGON_ID', 'OPENING_IND', 'INPUT_DATE', 'INTERPRETATION_DATE', 'ATTRIBUTION_BASE_DATE', 'REFERENCE_YEAR',  'REFERENCE_DATE',  'PROJECTED_DATE', 'EARLIEST_NONLOGGING_DIST_DATE', 'HARVEST_DATE', 'PROJECT', 'BEC_ZONE_CODE', 'BEC_SUBZONE', 'BEC_VARIANT', 'BEC_PHASE', 'EARLIEST_NONLOGGING_DIST_TYPE',  'STAND_PERCENTAGE_DEAD', 'FREE_TO_GROW_IND',  'INTERPRETED_DATA_SRC_CD', 'CROWN_CLOSURE', 'VRI_LIVE_STEMS_PER_HA', 'DATA_SRC_VRI_LIVE_STEM_HA_CD', 'VRI_DEAD_STEMS_PER_HA', 'TREE_COVER_PATTERN', 'VERTICAL_COMPLEXITY', 'SPECIES_CD_1', 'SPECIES_PCT_1', 'SPECIES_CD_2', 'SPECIES_PCT_2', 'SPECIES_CD_3', 'SPECIES_PCT_3', 'SPECIES_CD_4', 'SPECIES_PCT_4', 'SPECIES_CD_5', 'SPECIES_PCT_5', 'SPECIES_CD_6', 'SPECIES_PCT_6', 'PROJ_AGE_1', 'PROJ_AGE_CLASS_CD_1', 'PROJ_AGE_2', 'PROJ_AGE_CLASS_CD_2', 'DATA_SOURCE_AGE_CD', 'PROJ_HEIGHT_1', 'PROJ_HEIGHT_CLASS_CD_1', 'PROJ_HEIGHT_2', 'PROJ_HEIGHT_CLASS_CD_2', 'DATA_SOURCE_HEIGHT_CD', 'BecZone', 'SpeciesGroup', 'Age', 'Height', 'Rank', 'FD_PERCENT', 'PL_PERCENT', 'AT_PERCENT', 'Decid_PERCENT', 'NEAR_FID', 'NEAR_DIST')
-
-forsitedat <- rbind(atlas[neededcols], bam[neededcols], bbs[neededcols], wsi[neededcols])
-
-canfordat <- rbind(canfortfl[neededcols], canfortflwsi[neededcols])
-```
+#### Remove duplicates
 
 Isolate the replicates/rows I want from the canfordat. Those with PCODES within Canfor TFL and intersecting with Canfor TFL VRI layer. 
 
 ``` {r}
-canfortflpcodes <- c("TFL48VM", "BL2TFL48", "CW", "CF") 
+canfortflpcodes <- c("TFL48VM", "BL2TFL48", "CW", "CF") #project codes that were duplicate intersected
 
-canforwanted <- canfordat[canfordat$VRIintersectLayer == "Canfor_TFL_VRI",]
+canforwanted <- canfordat[canfordat$VRIintersectLayer == "Canfor_TFL_VRI" & canfordat$PCODE %in% canfortflpcodes,] # this is all rows within canfor tfl intersection
 ```
 
 Remove the replicates/rows I DON'T want from the forsitedat. Those with PCODES within Canfor TFL and intersecting the Forsite VRI layer.
 
 ``` {r}
 forsitedat$TempCode <- paste(forsitedat$PCODE, forsitedat$VRIintersectLayer, sep=".")
+head(forsitedat$TempCode)
 
 unwantedcodes <- paste(canfortflpcodes, "Forsite_VRI", sep=".")
+head(unwantedcodes)
 
 forsitewanted <- forsitedat[! forsitedat$TempCode %in% unwantedcodes,]
-forsitewanted <- forsitewanted[-65]
+forsitewanted <- forsitewanted[-ncol(forsitewanted)] #remove TempCode columns
 ```
 
-Combine forsite data and canfortfl data
-``` {r}
-alldat <- rbind(canforwanted, forsitewanted)
-```
+## Now extract out VRI attributes from the master full VRI file
 
-Remove any rows that are missing data for one of the four attributes
-``` {r}
-alldat.hasdat <- alldat[!is.na(alldat$BEC_ZONE_CODE),]
-alldat.hasdat <- alldat.hasdat[!is.na(alldat.hasdat$SPECIES_CD_1),]
-alldat.hasdat <- alldat.hasdat[!is.na(alldat.hasdat$PROJ_AGE_1),]
-alldat.hasdat <- alldat.hasdat[!is.na(alldat.hasdat$PROJ_HEIGHT_1),]
-
-```
-
-### Write the data to a file for future use
+#### Load pre-processed full VRI file
 
 ``` {r}
-write.table(alldat.hasdat, "data/VRIintersect_preprocess1.csv", row.names=F, col.names=T, sep=",")
+load("cache/vri_both.RData")
 ```
 
-## Conclusions
+##### Intersect to extract
 
-* I think I removed the unwanted duplicates
+Based on what I discovered above...
 
-## Next Steps
+* bird points intersecting the Canfor TFL should be linked via FID_VRI in the intersect file and OBJECTID in the vri_both file
+* bird points intersecting the Forsite VRI should be linked via FEATURE_ID in both the intersect and the vri_both file
 
-* Create two separate VRI files: 
-    * one for analyses using Kari/Forsite's 4 derived attributes (will exclude Canfor TFL); and
-    * one for density models (using variables from VRI directly, not derived)
-    
+##### Canfor
+
+Need to create a merging ID from FID_VRI and OBJECTID
+
+``` {r}
+intersect_canfor <- canforwanted
+intersect_canfor$CanforMergingID <- intersect_canfor$FID_VRI
+vri_both$CanforMergingID <- vri_both$OBJECTID
+
+intersect_canfor <- merge(intersect_canfor[c("FID_BIRD", "PCODE", "SS", "FID_VRI", "BirdLayer", "VRIintersectLayer", "CanforMergingID")], vri_both[vri_both$VRI_Layer == "Canfor_TFL",], by="CanforMergingID", all.x=T)
+nrow(intersect_canfor)
+colnames(intersect_canfor)
+
+```
+
+##### Forsite
+
+Use FEATURE_ID as merging ID. 
+
+``` {r}
+intersect_forsite <- forsitewanted
+
+intersect_forsite <- merge(intersect_forsite[c("FID_BIRD", "PCODE", "SS", "FID_VRI", "BirdLayer", "VRIintersectLayer", "FEATURE_ID")], vri_both[vri_both$VRI_Layer == "Forsite_VRI",], by="FEATURE_ID", all.x = T)
+
+nrow(intersect_forsite)
+colnames(intersect_forsite)
+```
 
 
+##### Combine forsite data and canfortfl data
 
+Need to remove out some columns I don't need.(namely, ID columns) 
+
+``` {r}
+cols_to_remove <- c("CanforMergingID", "FEATURE_ID")
+intersect_both <- rbind(intersect_canfor[-which(colnames(intersect_canfor) %in% cols_to_remove)], intersect_forsite[-which(colnames(intersect_forsite) %in% cols_to_remove)])
+nrow(intersect_both)
+colnames(intersect_both)
+```
+
+##### Cache all three versions
+``` {r}
+intersect_canfor <- intersect_both[intersect_both$VRIintersectLayer == "Canfor_TFL_VRI",]
+intersect_forsite <- intersect_both[intersect_both$VRIintersectLayer == "Forsite_VRI",]
+
+cache("intersect_canfor")
+cache("intersect_forsite")
+cache("intersect_both")
+```

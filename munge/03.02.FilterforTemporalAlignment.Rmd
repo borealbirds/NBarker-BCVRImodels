@@ -35,8 +35,8 @@ In this script:
 * 
 
 ``` {r}
-vri_intersect <- load("cache/")
- 
+load("cache/intersect_both.RData")
+vri_intersect <- intersect_both
 ```
 
 ### Possible dates to consider
@@ -53,7 +53,7 @@ vri_intersect <- load("cache/")
 
  
 ```{r}
-vri_dates <- vri_intersect[c(grep(c("Year"), colnames(vri_intersect)), which(colnames(vri_intersect) %in% c("PROJ_AGE_1", "VRIintersectLayer", "EARLIEST_NONLOGGING_DIST_TYPE", "INTERPRETER", "INTERPRETED_DATA_SRC_CD"), ))]
+vri_dates <- vri_intersect[c(grep(c("Year"), colnames(vri_intersect)), which(colnames(vri_intersect) %in% c("PROJ_AGE_1", "VRIintersectLayer", "EARLIEST_NONLOGGING_DIST_TYPE", "INTERPRETER", "INTERPRETED_DATA_SRC_CD")))]
 
 vri_dates <- vri_dates[order(vri_dates$VRIintersectLayer, vri_dates$PROJ_AGE_1),]
 

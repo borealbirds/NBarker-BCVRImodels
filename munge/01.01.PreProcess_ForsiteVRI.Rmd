@@ -1,11 +1,13 @@
 ---
 title: "Preprocess Full Forsite VRI Files"
 author: "Nicole Barker"
-date: "Last run: Dec 20, 2017"
+date: "Last run: Dec 22, 2017"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
 ---
+## Script Abstract
+Initial inspection of the attribute table exported from the Forsite-modified version of the VRI dataset. Identifies which field is a unique identifier. Saves by caching as RData to the cache folder. 
 
 ## Background
 

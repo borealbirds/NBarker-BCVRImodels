@@ -1,13 +1,16 @@
 ---
 title: "Preprocess Canfor TFL VRI File"
 author: "Nicole Barker"
-date: "Last run: Dec 20, 2017"
+date: "Last run: Dec 22, 2017"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
 ---
+## Script Abstract
+Initial inspection of the attribute table exported from the Canfor TFL VRI dataset. Identifies which field is a unique identifier. Saves by caching as RData to the cache folder. 
 
 ## Background
+The Forsite VRI file (from the provincial dataset) is missing data for some regions. Canfor provided me the VRI data for their TFLs. I needed to process it separately. Note that because it wasn't processed by Forsite, the stands do not have ranks associated with them. 
 
 **FILES**
 

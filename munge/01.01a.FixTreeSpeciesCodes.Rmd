@@ -1,12 +1,16 @@
 ---
 title: "TroubleShooting Tree Species Codes"
 author: "Nicole Barker"
-date: "Last run: Dec 20, 2017"
+date: "Last run: Dec 22, 2017"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
 ---
+## Script Abstract
+Identify the various tree species codes used in different files (e.g., matrix, VRI, etc.). Using the standardized species code lookup table, add a new column containing the standardized tree species group code to the full VRI file. Note that this step required some previous exploration work to determine which SpeciesGroup codes refer to the same thing. This relied on some background reference materials from Kari Stuart-Smith, and also some discussion with her. The end result is a corrected version of the attribute table from the Forsite VRI shapefile. It is cached as an RData file.
 
+
+## Background
 I discovered in fall 2016 that different files have different labels for Tree Species codes (e.g., Forsite's VRI shapefile, the matrix I received from Kari, and the Ranking Matrix ReadMe where I got my descriptions from).
 
 This report and the embedded scripts:

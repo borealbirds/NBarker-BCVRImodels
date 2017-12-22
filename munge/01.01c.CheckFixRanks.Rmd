@@ -181,7 +181,7 @@ I cross-referenced some of these combinations of BecZone and Species Group with 
 
 * Many of the unranked ForIDs were not ranked because they were considered unlikely according to Kari. Many of these have small area on the landscape
 * One set was ranked by Kari but not transferred to the Forsite shapefile. IDF & Decid. I can fix this by pulling over Kari's ranks into a combined rank file based on forest attributes. 
-* Some forest stands exist with large areas but are not ranked in Kari's file. 
+* Some forest stands exist with large areas but are not ranked in Kari's file. If they have ranks from the Forsite file, I'll use them (because they were created based on the same rules that Kari's ranks were built on). However for others that don't have a rank in either place, I will just have to keep unranked. 
 
 ``` {r}
 kable(vri.50ha[1:30,], row.names=F)
@@ -359,5 +359,24 @@ ranks[ranks$ForestArea == 0,]$FinalRank <- "Unranked"
 
 ``` {r}
 write.table(ranks, file="data/ForID_Ranks_final_long.csv", sep=",", row.names=F, col.names = T)
+```
+
+## Add fixed ranks back to VRI file
+
+Load and do some quick fixes (SpeciesGroup column name, creation of ForID)
+
+``` {r}
+load("cache/vri_forsite_zSpGroup.RData")
+colnames(vri_forsite_zSpGroup)[which(colnames(vri_forsite_zSpGroup)=="code_use")] <- "SpeciesGroup" #rename standardized species codes to "SpeciesGroup"
+vri_forsite_zSpGroup$ForID <- with(vri_forsite_zSpGroup, paste(BecZone, SpeciesGroup, Age, Height, sep="."))
 
 ```
+
+Merge corrected ranks with shapefile
+``` {r}
+vri_forsite_zSpGroup_Rankfixed <- merge(vri_forsite_zSpGroup, ranks, by="ForID", all.x=T)
+cache("vri_forsite_zSpGroup_Rankfixed")
+kable(vri_forsite_zSpGroup_Rankfixed[1:2, c(1:4, (ncol(vri_forsite_zSpGroup_Rankfixed) - 4):ncol(vri_forsite_zSpGroup_Rankfixed))], row.names=F)
+```
+
+

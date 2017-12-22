@@ -1,11 +1,14 @@
 ---
 title: "Merge Forsite and Canfor TFL VRI files together"
 author: "Nicole Barker"
-date: "Last run: Dec 20, 2017"
+date: "Last run: Dec 22, 2017"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
 ---
+
+## Script Abstract
+Identify which columns are needed from both VRI files (Canfor and Forsite). Add blank columns to Canfor file so it can be combind with the Forsite file. Combine the two files together and modify the factors to have the correct levels. 
 
 ## Background
 
@@ -13,7 +16,7 @@ Forsite's VRI file has blank attributes for tree farm licences (TFLs) that Canfo
 
 **FILES**
 
-1. vri_forsite_zSpGroup_fixedRankArea.RData
+1. vri_forsite_zSpGroup_Rankfixed.RData
 2. vri_canfortfl.RData
 
 In this script, I: 
@@ -44,9 +47,9 @@ options(digits=12)
 ### Look for overlapping columns between two VRI files
 
 ``` {r}
-load("cache/vri_forsite_zSpGroup.RData")
-vri_forsite <- vri_forsite_zSpGroup; rm(vri_forsite_zSpGroup)
-colnames(vri_forsite)[which(colnames(vri_forsite)=="code_use")] <- "SpeciesGroup" #rename standardized species codes to "SpeciesGroup"
+load("cache/vri_forsite_zSpGroup_Rankfixed.RData")
+vri_forsite <- vri_forsite_zSpGroup_Rankfixed; rm(vri_forsite_zSpGroup_Rankfixed)
+
 forsite_colnames <- data.frame(ColName=colnames(vri_forsite), In_ForsiteVRI=as.character("Yes"))
 
 load("cache/vri_canfortfl.RData")
@@ -109,7 +112,7 @@ vri_forsite2$VRI_Layer <- "Forsite_VRI"
 #### rbind together
 
 ``` {r}
-vri_all <- rbind(vri_canfortfl2, vri_forsite2)
+vri_both <- rbind(vri_canfortfl2, vri_forsite2)
 ```
 
 ## More pre-processing
@@ -122,45 +125,45 @@ F.convertdate.extractyear <- function(x){
   years <- format(dates,'%Y')
 }
 
-vri_all$InputYear <- F.convertdate.extractyear(vri_all$INPUT_DATE)
-vri_all$ProjectedYear <- F.convertdate.extractyear(vri_all$PROJECTED_DATE)
-vri_all$InterpretYear <- F.convertdate.extractyear(vri_all$INTERPRETATION_DATE)
-vri_all$ReferenceYear <- F.convertdate.extractyear(vri_all$REFERENCE_DATE)
-vri_all$AttributionYear <- F.convertdate.extractyear(vri_all$ATTRIBUTION_BASE_DATE)
-vri_all$DistYear_Nonlog <- F.convertdate.extractyear(vri_all$EARLIEST_NONLOGGING_DIST_DATE)
-vri_all$DistYear_Log <- F.convertdate.extractyear(vri_all$HARVEST_DATE)
-vri_all$DisturbanceYear <- apply(vri_all[c("DistYear_Nonlog", "DistYear_Log")], MARGIN=1, FUN=function(x) {max(x, na.rm=T)}) 
+vri_both$InputYear <- F.convertdate.extractyear(vri_both$INPUT_DATE)
+vri_both$ProjectedYear <- F.convertdate.extractyear(vri_both$PROJECTED_DATE)
+vri_both$InterpretYear <- F.convertdate.extractyear(vri_both$INTERPRETATION_DATE)
+vri_both$ReferenceYear <- F.convertdate.extractyear(vri_both$REFERENCE_DATE)
+vri_both$AttributionYear <- F.convertdate.extractyear(vri_both$ATTRIBUTION_BASE_DATE)
+vri_both$DistYear_Nonlog <- F.convertdate.extractyear(vri_both$EARLIEST_NONLOGGING_DIST_DATE)
+vri_both$DistYear_Log <- F.convertdate.extractyear(vri_both$HARVEST_DATE)
+vri_both$DisturbanceYear <- apply(vri_both[c("DistYear_Nonlog", "DistYear_Log")], MARGIN=1, FUN=function(x) {max(x, na.rm=T)}) 
 ```
 
 ### Stand Age classification
 
 ``` {r}
 ageclassbreaks <- c(0, 3, 30, 80, 120, 250, 1000)
-vri_all$AgeClass_calc <- cut(vri_all$PROJ_AGE_1, breaks = ageclassbreaks, include.lowest = TRUE, labels = c("0-3 yrs", "3-30 yrs", "31-80 yrs", "81-120 yrs", "121-250 yrs", ">250 yrs"))
+vri_both$AgeClass_calc <- cut(vri_both$PROJ_AGE_1, breaks = ageclassbreaks, include.lowest = TRUE, labels = c("0-3 yrs", "3-30 yrs", "31-80 yrs", "81-120 yrs", "121-250 yrs", ">250 yrs"))
 
-kable(rbind(head(vri_all[c("PROJ_AGE_1", "AgeClass_calc", "VRI_Layer")]),
-            tail(vri_all[c("PROJ_AGE_1", "AgeClass_calc", "VRI_Layer")])))
+kable(rbind(head(vri_both[c("PROJ_AGE_1", "AgeClass_calc", "VRI_Layer")]),
+            tail(vri_both[c("PROJ_AGE_1", "AgeClass_calc", "VRI_Layer")])))
 ```
 
 ### Stand Height classification
 
 ``` {r}
 heightclassbreaks <- c(0, 10.5, 19.5, 28.5, 100)
-vri_all$HeightClass_calc <- cut(vri_all$PROJ_HEIGHT_1, breaks = heightclassbreaks, include.lowest = TRUE, labels = c("<10.5 m", "10.5-19.4 m", "19.5-28.4 m", "> 28.5 m"))
+vri_both$HeightClass_calc <- cut(vri_both$PROJ_HEIGHT_1, breaks = heightclassbreaks, include.lowest = TRUE, labels = c("<10.5 m", "10.5-19.4 m", "19.5-28.4 m", "> 28.5 m"))
 
-kable(rbind(head(vri_all[c("PROJ_HEIGHT_1", "HeightClass_calc", "VRI_Layer")]),
-            tail(vri_all[c("PROJ_HEIGHT_1", "HeightClass_calc", "VRI_Layer")])))
+kable(rbind(head(vri_both[c("PROJ_HEIGHT_1", "HeightClass_calc", "VRI_Layer")]),
+            tail(vri_both[c("PROJ_HEIGHT_1", "HeightClass_calc", "VRI_Layer")])))
 ```
 
 ## Save files
 
 ``` {r, eval=T}
-cache("vri_all")
+cache("vri_both")
 
-vri_canfortfl_postclean <- vri_all[vri_all$VRI_Layer == "Canfor_TFL",]
+vri_canfortfl_postclean <- vri_both[vri_both$VRI_Layer == "Canfor_TFL",]
 cache("vri_canfortfl_postclean")
 
-vri_forsite_postclean <- vri_all[vri_all$VRI_Layer == "Forsite_VRI",]
+vri_forsite_postclean <- vri_both[vri_both$VRI_Layer == "Forsite_VRI",]
 cache("vri_forsite_postclean")
 ```
 

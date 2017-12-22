@@ -6,6 +6,11 @@ output:
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
 ---
+## Script Abstract
+
+Quality-checks, corrects, pre-processes, and merges the various tables from BAM's Avian Database. Removes duplicates. Performs some initial tests of patterns in avian data by survey method to help decide how to harmonize the data. 
+Combines spatial data (SS), survey instance (PKEY), and point count (ABUND) data into one flat dataset and saves as csv for future use: _data/birddata_preprocess1.csv_
+
 
 ## Background
 On Nov 30, 2017, Trish provided me with the Access Database of BAM's avian data: COFI_BC_NOV30_2017.accdb. I exported the 3 tables based on BAM's standard data format.
@@ -356,7 +361,7 @@ write.table(xy.pkey.pc3, file="data/birddata_preprocess1.csv", sep=",", row.name
 ```
 
 
-### Check for Systematic Differences Among Surveys
+## Check for Systematic Differences Among Surveys
 
 BC Models are to be built for all species, not individual species. Peter explored the possibility of a Total Bird offset, which corrects for survey methodlogy and detectability in general, but not individual species detectability. When my preliminary results didn't follow expected patterns in bird response to forest age and height, we started to wonder if the total offset is obscuring some of those patterns. 
 

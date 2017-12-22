@@ -1,16 +1,19 @@
 ---
 title: "Calculate Forest Areas from Shapefile"
 author: "Nicole Barker"
-date: "Dec 20, 2017"
+date: "Dec 22, 2017"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
 ---
 
-# Purpose: Calculate areas of forest stand types 
+## Script Abstract
 
-**Background & Motivation:** Forsite supplied forest area in the matrix format, in a file called __area_summary_with_matrix.xlsx__. In early analyses, I noticed some odd results, such as finding point counts in a forest stand type with 0 area. 
+Calculate area per forest stand type by aggregating the polygon areas I calculated in ArcGIS. Compare these areas to those calculated independently by Barb Sobota, a tech with CWS. Then create a final dataset of forest stand area by stand type to be used in subsequent analyses. Saved as a csv file with an area per forest stand type (ForID).
 
+## Background 
+
+Forsite supplied forest area in the matrix format, in a file called __area_summary_with_matrix.xlsx__. In early analyses, I noticed some odd results, such as finding point counts in a forest stand type with 0 area. 
 So here, I'm re-calculating areas based on the shapefile received from Forsite. And then I'm comparing to results supplied to me by Barb, who did some GIS work to confirm my results. 
 
 **Steps:**
