@@ -28,11 +28,11 @@ Combines spatial data (SS), survey instance (PKEY), and point count (ABUND) data
 
 7. **01.03.Merge_Full_VRI_Data.Rmd** - Identify which columns are needed from both VRI files (Canfor and Forsite). Add blank columns to Canfor file so it can be combind with the Forsite file. Combine the two files together and modify the factors to have the correct levels. 
 
-8. **02.01.PreprocessVRIIntersectFiles.docx** - Check for duplicates and errors within the bird-intersected VRI data. Identify which columns are unique polygon/stand identifiers in the full VRI file and which can be used to intersect with the bird-intersected versions of the VRI dataset. Extract the corrected VRI data out of the full-VRI dataset based on the polygon identifiers intersected by bird data. Cache the full dataset and the one split into Canfor and Forsite as RData files. 
+8. **02.01.PreprocessVRIIntersectFiles.Rmd** - Check for duplicates and errors within the bird-intersected VRI data. Identify which columns are unique polygon/stand identifiers in the full VRI file and which can be used to intersect with the bird-intersected versions of the VRI dataset. Extract the corrected VRI data out of the full-VRI dataset based on the polygon identifiers intersected by bird data. Remove any obviously problematic polygons, such as those with inexplicably missing information (age = NA). Cache the full dataset and the one split into Canfor and Forsite as RData files. 
+
+9. **02.02.FilterforTemporalAlighment.Rmd** - 
 
 
-
-Temporal alignment
 
 Distance to edge. 
 

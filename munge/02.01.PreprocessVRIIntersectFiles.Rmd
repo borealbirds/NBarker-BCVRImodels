@@ -289,12 +289,12 @@ kable(rbind(head(vri_canfor_FIDS), tail(vri_canfor_FIDS)), row.names=F)
 kable(rbind(head(intersect_FIDS), tail(intersect_FIDS)), row.names=F)
 ```
 
-** CONCLUSION**
+**CONCLUSION**
 
 * Looks like **YES**, OBJECTID from full VRI file is the same unique identifier as FID_VRI
 * This is perhaps obvious to some people, but I didn't do the GIS queries, so I needed to double-check for my own peace of mind. 
 
-** Next Steps**
+**Next Steps**
 
 * Double-check the same is true for the Forsite VRI file and not just the Canfor one
 
@@ -309,6 +309,10 @@ gc()
 load("cache/vri_forsite_postclean.RData")
 vri_forsite <- vri_forsite_postclean; rm(vri_forsite_postclean)
 ```
+
+**NOTES**
+
+* initial examination revealed absence of OBJECTID from one of the files. But both have FEATURE_ID, so I'm checking if that is consistent between datasets as a unique identifier
 
 ##### Subset full VRI dataset for those FEATURE_ID in the bird-intersected VRI files. 
 
@@ -336,7 +340,7 @@ kable(head(atlas), row.names=F )
 
 * So FEATURE_ID seems to be good for combining the various Forsite_VRI intersected files with the full forsite_FRI file. This is reasonable since we already determined that FEATURE_ID is a unique polygon identifier. 
 
-** Next Steps **
+**Next Steps**
 
 * Before extracting out the intersected IDs to make the final intersected file, I want to do some more quality-checking to identify possible duplicates among the various bird-VRI intersection datasets
 
@@ -367,7 +371,7 @@ What are the possible duplication scenarios?
 cols_to_keep <- c("VRIintersectLayer","FID_VRI", "BirdLayer", "FID_BIRD", "PCODE", "SS", "FEATURE_ID") #columns I want from all bird-intersected VRI data
 ```
 
-** Datasets intersecting Canfor TFL**
+**Datasets intersecting Canfor TFL**
 ``` {r}
 canfortfl <- read.csv("data/BC_CanforTFLvri_bampointsIdent.csv", header=T)
 canfortflwsi <- read.csv("data/BC_CanforTFLvri_WSI.csv", header=T)
@@ -399,7 +403,7 @@ sum(duplicated(canfordat$SS))
 
 * No duplicated SS here. 
 
-** Datasets intersecting Forsite VRI**
+**Datasets intersecting Forsite VRI**
 
 ``` {r}
 atlas <- read.csv("data/bc_atlas_ident.csv", header=T)
@@ -603,6 +607,7 @@ Need to remove out some columns I don't need.(namely, ID columns)
 ``` {r}
 cols_to_remove <- c("CanforMergingID", "FEATURE_ID")
 intersect_both <- rbind(intersect_canfor[-which(colnames(intersect_canfor) %in% cols_to_remove)], intersect_forsite[-which(colnames(intersect_forsite) %in% cols_to_remove)])
+intersect_both$VRI.layer.polygon.ID <- paste(intersect_both$VRI_Layer, intersect_both$FID_VRI, sep=".")
 nrow(intersect_both)
 colnames(intersect_both)
 ```
@@ -610,39 +615,141 @@ colnames(intersect_both)
 
 ## Remove subsets of intersected data I don't want
 
-Stands where we're missing information I need for modelling
+Stands where we're missing key information
 
-* No age; PROJ_AGE_1 == NA
+* No age; PROJ_AGE_1 == NA or Age=0
 * No height; PROJ_HEIGHT_1 == 0 or NA
 * 
 
-#### Check age = NA
+#### Check age = NA (specifically, PROJ_AGE_1)
 
 ``` {r}
-nrow(intersect_both[is.na(intersect_both$PROJ_AGE_1),])
-head(intersect_both[is.na(intersect_both$PROJ_AGE_1),])
+NA.age <- intersect_both[is.na(intersect_both$PROJ_AGE_1),]
+
+nrow(NA.age)
 ```
 
 ** NOTES**
 
 * I explored in the shapefile to see why a stand might have some information (e.g., years, BecZones, etc) but other information missing (SPECIES_CD all NA; PROJ age and PROJ height all NA)
-* Some stands had non productive descriptors or codes
-* Others appeared to be national parks
+* Having NA or 0 for PROJ_AGE_1 or Age isn't automatically missing information. It could indicate non-forested stands.  could still be useful for modelling bird densities.
+* Some stands had non productive descriptors or codes but many did not
 
 ``` {r}
-table(intersect_both$NON_PRODUCTIVE_DESCRIPTOR_CD[is.na(intersect_both$PROJ_AGE_1)])
+t.npd <- as.data.frame(table(NA.age$NON_PRODUCTIVE_DESCRIPTOR_CD))
+colnames(t.npd)[1] <- c("CODE")
+npdcd <- read.csv("data/LOOKUP.NonProductiveDescriptors.csv", header=T)
+t.npd <- merge(npdcd[c("CODE", "DESCRIPTION")], t.npd, by="CODE", all.y=T)
+kable(t.npd, caption="Frequency of each type of non-productive indicator within the polygons where PROJ_AGE_1 = NA")
 ```
 
+**NOTES**
+
+* the `r t.npd[t.npd$CODE == "",]$Freq` polygons without a code had a blank in the VRI shapefile
+    * tentatively, I could keep these in the dataset for now, and consider including information in modelling. 
+* other codes with NA for description are codes not explained in the VRI Data Dictionary
+    * it's not worth the time to dig into why these forest stands have PROJ_AGE_1 = NA, so I'll exclude any where PROJ_AGE_1 = NA and NON_PRODUCTIVE_DESCRIPTOR_CD is blank (""). 
+
+``` {r}
+nonprod.discard <- NA.age[NA.age$NON_PRODUCTIVE_DESCRIPTOR_CD == "",]
+nonprod.discard.ID <- nonprod.discard$VRI.layer.polygon.ID
+```
+
+#### Check age = 0
+
+``` {r}
+zero.age <- intersect_both[intersect_both$PROJ_AGE_1 %in% 0,]
+
+nrow(zero.age)
+
+zero.age <- intersect_both[intersect_both$Age %in% 0,]
+
+nrow(zero.age)
+```
+
+**NOTES**
+
+* No polygons have PROJ_AGE_1 = 0
+* `r nrow(zero.age)` have Age=0 (the Forsite-calculated age field)
+* A quick check suggests that the PROJ_AGE_1 = NA polygons are also the Age=0 polygons `sum(zero.age$FID_VRI %in% NA.age$FID_VRI)` `r sum(zero.age$FID_VRI %in% NA.age$FID_VRI)`
+* A few polygons have Age = 0 but PROJ_AGE_1 == 2. This is likely because Forsite judged 1-2 year old stands as functionally 0 age forests. This argues for me using PROJ_AGE_1 in my models rather than Age.
 
 
-nrow(intersect_both[intersect_both$PROJ_AGE_1 %in% 0,])
-Well actually age = 0 isn't missing information. It could indicate non-forested stands. e.g., non_productive_code = OR means the polygon is open range. This could still be useful for modelling bird densities...  
+#### Check height = NA (specifically, PROJ_HEIGHT_1)
+
+``` {r}
+NA.height <- intersect_both[is.na(intersect_both$PROJ_HEIGHT_1),]
+
+nrow(NA.height)
+
+t.npd <- as.data.frame(table(NA.height$NON_PRODUCTIVE_DESCRIPTOR_CD))
+colnames(t.npd)[1] <- c("CODE")
+npdcd <- read.csv("data/LOOKUP.NonProductiveDescriptors.csv", header=T)
+t.npd <- merge(npdcd[c("CODE", "DESCRIPTION")], t.npd, by="CODE", all.y=T)
+kable(t.npd, caption="Frequency of each type of non-productive indicator within the polygons where PROJ_AGE_1 = NA")
+```
+
+* A quick check suggests that the PROJ_HEIGHT_1 = NA polygons are also PROJ_AGE_1=NA: `sum(NA.height$FID_VRI %in% NA.age$FID_VRI)` `r sum(NA.height$FID_VRI %in% NA.age$FID_VRI)`
+    * i.e., they get treated the same way, based on presence of non-productive code. 
+
+
+#### Remove stands without age/height and without non-productive indicator
+
+``` {r}
+intersect_both.fewerNA <- intersect_both[!intersect_both$VRI.layer.polygon.ID %in% nonprod.discard.ID,]
+
+```
+
+#### Check on other potentially missing information
+``` {r}
+sum(is.na(unique(intersect_both.fewerNA$BEC_ZONE_CODE))) # are there any polygons with BEC_ZONE_CODE?
+sum(is.na(unique(intersect_both.fewerNA$SPECIES_PCT_1))) # are there any polygons with BEC_ZONE_CODE?
+(unique(intersect_both.fewerNA$SPECIES_PCT_1))
+
+```
+
+#### Check SPECIES_PCT_1 = NA
+
+``` {r}
+NA.sppct <- intersect_both.fewerNA[is.na(intersect_both.fewerNA$SPECIES_PCT_1),]
+kable(rbind(head(NA.sppct[c("PROJ_AGE_1", "PROJ_HEIGHT_1", "SPECIES_CD_1", "SPECIES_PCT_1", "BEC_ZONE_CODE", "NON_PRODUCTIVE_DESCRIPTOR_CD")]),
+            tail(NA.sppct[c("PROJ_AGE_1", "PROJ_HEIGHT_1", "SPECIES_CD_1", "SPECIES_PCT_1", "BEC_ZONE_CODE", "NON_PRODUCTIVE_DESCRIPTOR_CD")])))
+unique(NA.sppct$NON_PRODUCTIVE_DESCRIPTOR_CD)
+            
+```
+
+**NOTES**
+
+* Looks like all places where percent of species 1 = NA is also where a non-productive code exists. So I'll leave them alone. 
+
+
+#### Check SPECIES_PCT_1 = 0
+
+``` {r}
+zero.sppct <- intersect_both.fewerNA[intersect_both.fewerNA$SPECIES_PCT_1 %in% 0,]
+kable(rbind(head(zero.sppct[c("PROJ_AGE_1", "PROJ_HEIGHT_1", "SPECIES_CD_1", "SPECIES_PCT_1", "BEC_ZONE_CODE", "NON_PRODUCTIVE_DESCRIPTOR_CD")]),
+            tail(zero.sppct[c("PROJ_AGE_1", "PROJ_HEIGHT_1", "SPECIES_CD_1", "SPECIES_PCT_1", "BEC_ZONE_CODE", "NON_PRODUCTIVE_DESCRIPTOR_CD")])))
+unique(zero.sppct$PROJ_AGE_1)
+            
+```
+
+**NOTES**
+
+* When there's 0 percent cover and no SPECIES_CD, the forest is either 1 or 2 years old, and therefore not functionally a forest. 
+* I'll keep these polygons in for possible modelling.
+
+
+## Conclusions
+
+* I cut any stands/polygons where there was no value for PROJ_AGE / PROJ_HEIGHT and no explanation by ways of a non-productive descriptor code. 
+* I kept any stands/polygons without PROJ_AGE/PROJ_HEIGHT  so long as there was a non-productive descriptor code explaining why the land didn't have a forest age, height, or cover percentages
+
 
 
 ##### Cache all three versions
 ``` {r}
-intersect_canfor <- intersect_both[intersect_both$VRIintersectLayer == "Canfor_TFL_VRI",]
-intersect_forsite <- intersect_both[intersect_both$VRIintersectLayer == "Forsite_VRI",]
+intersect_canfor <- intersect_both.fewerNA[intersect_both.fewerNA$VRIintersectLayer == "Canfor_TFL_VRI",]
+intersect_forsite <- intersect_both.fewerNA[intersect_both.fewerNA$VRIintersectLayer == "Forsite_VRI",]
 
 cache("intersect_canfor")
 cache("intersect_forsite")
