@@ -1,7 +1,7 @@
 ---
 title: "Extract Intersected VRI Data"
 author: "Nicole Barker"
-date: "Last run: Dec 22, 2017"
+date: "Last run: Dec 29, 2017"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -750,6 +750,7 @@ unique(zero.sppct$PROJ_AGE_1)
 ``` {r}
 intersect_canfor <- intersect_both.fewerNA[intersect_both.fewerNA$VRIintersectLayer == "Canfor_TFL_VRI",]
 intersect_forsite <- intersect_both.fewerNA[intersect_both.fewerNA$VRIintersectLayer == "Forsite_VRI",]
+intersect_both <- intersect_both.fewerNA
 
 cache("intersect_canfor")
 cache("intersect_forsite")

@@ -1,7 +1,7 @@
 ---
 title: "Merge Forsite and Canfor TFL VRI files together"
 author: "Nicole Barker"
-date: "Last run: Dec 22, 2017"
+date: "Last run: Dec 29, 2017"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -172,6 +172,14 @@ vri_both$AgeClass_calc <- ordered(vri_both$AgeClass_calc) # make an ordered fact
 
 kable(rbind(head(vri_both[c("PROJ_AGE_1", "AgeClass_calc", "VRI_Layer")]),
             tail(vri_both[c("PROJ_AGE_1", "AgeClass_calc", "VRI_Layer")])))
+
+```
+
+##### What about stands without age (e.g., used for other purposes)
+
+``` {r}
+head(vri_both[is.na(vri_both$AgeClass_calc), c("PROJ_AGE_1", "AgeClass_calc", "Age", "NON_PRODUCTIVE_DESCRIPTOR_CD")])
+vri_both[is.na(vri_both$AgeClass_calc),]$AgeClass_calc <- "0-2 yrs" #replace non-forested stands with 0-2 years
 ```
 
 ### Stand Height classification
@@ -186,6 +194,13 @@ kable(rbind(head(vri_both[c("PROJ_HEIGHT_1", "HeightClass_calc", "VRI_Layer")]),
             tail(vri_both[c("PROJ_HEIGHT_1", "HeightClass_calc", "VRI_Layer")])))
 ```
 
+##### What about stands without height (e.g., non-forested)
+
+``` {r}
+head(vri_both[is.na(vri_both$HeightClass_calc), c("PROJ_HEIGHT_1", "HeightClass_calc", "Height", "NON_PRODUCTIVE_DESCRIPTOR_CD")])
+vri_both[is.na(vri_both$HeightClass_calc),]$HeightClass_calc <- "<10.5 m" #replace non-forested stands with < 10.5 m
+```
+
 ## Save files
 
 ``` {r, eval=T}
@@ -197,5 +212,3 @@ cache("vri_canfortfl_postclean")
 vri_forsite_postclean <- vri_both[vri_both$VRI_Layer == "Forsite_VRI",]
 cache("vri_forsite_postclean")
 ```
-
-
