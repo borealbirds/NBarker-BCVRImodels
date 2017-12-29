@@ -1,7 +1,7 @@
 ---
 title: "Filter for temporal alignment"
 author: "Nicole Barker"
-date: "Last run: Dec 22, 2017"
+date: "Last run: Dec 29, 2017"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -27,7 +27,7 @@ opts_knit$set(root.dir = '..')
 ```
 
 ``` {r load.project, message=F}
-require(ProjectTemplate)
+○require(ProjectTemplate)
 load.project()
 options(digits=12)
 ```
@@ -49,9 +49,8 @@ vri_intersect <- intersect_both; rm(intersect_both)
 * **earliest_nonlogging_dist_date**: Represents the polygons earliest non-logging disturbance date.
 * **harvest_date**: The date in which the polygon was last harvested.
 
-##### Look at the various dates
+#### Look at the various dates
 
- 
 ```{r}
 vri_dates <- vri_intersect[c(grep(c("Year"), colnames(vri_intersect)), which(colnames(vri_intersect) %in% c("PROJ_AGE_1", "VRIintersectLayer", "EARLIEST_NONLOGGING_DIST_TYPE", "INTERPRETED_DATA_SRC_CD")))]
 
@@ -63,7 +62,6 @@ vri_dates_sample <- vri_dates[sample(1:nrow(vri_dates), 50),]
 
 kable(vri_dates_sample, row.names=F)
 ```
-
 
 **NOTES**
 
@@ -98,7 +96,7 @@ The resulting projection will be as reliable as the model, so we perhaps have le
 
 ##### Calculate the difference (in years) between BAM Survey year and VRI photo/reference year
 
-Merge the intersected VRI polygons with the point count survey information (pkey)
+**Merge the intersected VRI polygons with the point count survey information (pkey)**
 
 ``` {r}
 birds <- read.csv("data/birddata_preprocess1.csv", header=T)
@@ -112,7 +110,7 @@ vri_birdsurveys <- merge(vri_intersect, birdsurveys, by="SS") #keep only bird su
 
 * Cutting out bird surveys that don't intersect the VRI dataset removes some bird surveys, particularly Atlas and BBS, which were done more coastal and on Vancouver island
 
-Calculate # years difference between the bird survey (YYYY) and the inventory date (ReferenceYear) 
+**Calculate # years difference between the bird survey (YYYY) and the inventory date (ReferenceYear)**
 
 ``` {r Fig.Diff_BirdSurvey_VRIPhoto, fig.height=6, fig.width=9, dpi=200}
 vri_birdsurveys$Difference_Bird_Photo <- vri_birdsurveys$YYYY - as.numeric(vri_birdsurveys$ReferenceYear)
@@ -120,12 +118,13 @@ vri_birdsurveys$Difference_Bird_Photo <- vri_birdsurveys$YYYY - as.numeric(vri_b
 ggplot(vri_birdsurveys, aes(x=Difference_Bird_Photo, fill=DisturbanceYear)) + geom_histogram(bins=40) + myfacettheme3 + ylab("Number of Point Count Surveys") + xlab("Difference (in years) between bird survey year and VRI Reference Year") + geom_vline(xintercept=0, linetype="dashed", color="red", size=1)
 ```
 
-** NOTES**
+**NOTES**
 
-* Many rows removed. Why? 
-* Canfor doesn't have REFERENCE_DATE or REFERENCE_YEAR. Will just have to trust that the dataset was updated recently and I don't need to worry about time lags between when inventory was done and the projected date. 
+* Many rows removed in the creation of that figure? Why? 
+    * Canfor doesn't have REFERENCE_DATE or REFERENCE_YEAR. Will just have to trust that the dataset was updated recently and I don't need to worry about time lags between when inventory was done and the projected date. 
 
-#### Replace canfor's ReferenceYear with the YYYY from the bird surveys, since I agreed to accept these date. 
+#### Replace canfor's ReferenceYear with the YYYY from the bird surveys, since I agreed to accept these dates. 
+
 ``` {r}
 vri_birdsurveys[vri_birdsurveys$VRI_Layer == "Canfor_TFL",]$ReferenceYear <- vri_birdsurveys[vri_birdsurveys$VRI_Layer == "Canfor_TFL",]$YYYY
 vri_birdsurveys$Difference_Bird_Photo <- vri_birdsurveys$YYYY - as.numeric(vri_birdsurveys$ReferenceYear) #recalculate difference between bird survey and reference year
@@ -147,11 +146,23 @@ kable(toleratedlags, row.names=F)
 
 ``` {r}
 vri_birdsurveys <- merge(vri_birdsurveys, toleratedlags, by="AgeClass_calc", all.x=T)
+```
+
+##### Manually change toleratedlag for known non-forested stands to 10 years. I want to include them, within reason
+
+``` {r}
+vri_birdsurveys[vri_birdsurveys$AgeClass_calc == "0-2 yrs" & (is.na(vri_birdsurveys$PROJ_AGE_1) == T),]$ToleratedLag <-10
+```
+
+##### Identify where lags exceed my tolerated
+``` {r}
 vri_birdsurveys$LagExceedsTolerated <- abs(vri_birdsurveys$Difference_Bird_Photo) > abs(vri_birdsurveys$ToleratedLag)
 kable(rbind(
   head(vri_birdsurveys[c("Difference_Bird_Photo", "YYYY", "ReferenceYear", "AgeClass_calc", "ToleratedLag", "LagExceedsTolerated", "VRI_Layer")]), 
   tail(vri_birdsurveys[c("Difference_Bird_Photo", "YYYY", "ReferenceYear", "AgeClass_calc", "ToleratedLag", "LagExceedsTolerated", "VRI_Layer")])))
 ```
+
+**NOTES**
 
 * Number of bird surveys where difference between bird survey and inventory reference year exceeds acceptable lag: `r sum(vri_birdsurveys$LagExceedsTolerated)` of `r nrow(vri_birdsurveys)`, leaving `r nrow(vri_birdsurveys) - sum(vri_birdsurveys$LagExceedsTolerated)` surveys. 
 
@@ -159,51 +170,90 @@ kable(rbind(
 
 ``` {r}
 vri_birdsurveys2 <- vri_birdsurveys[vri_birdsurveys$LagExceedsTolerated == 0,]
+vri_birdsurveys2$ReferenceYear <- as.character(vri_birdsurveys2$ReferenceYear)
 ```
 
+## Eliminate the scenarios we may not trust, keeping only those we're pretty darn confident in
 
-### Eliminate the scenarios we may not trust, keeping only those we're pretty darn confident in
+We have the three scenarios described above re: sequence in three events (bird survey, VRI inventory, and disturbance). But what do we do when no disturbance was recorded?
 
-
-#### First, work on subset of data where no disturbance was recorded
+### First, work on subset of data where no disturbance was recorded
 
 ``` {r}
 vri_bird_nodist <- vri_birdsurveys2[is.na(vri_birdsurveys2$DisturbanceYear),] #no disturbance recorded
 vri_bird_dist <- vri_birdsurveys2[!is.na(vri_birdsurveys2$DisturbanceYear),]  #disturbance recorded
 ```
 
-##### For stands with no recorded disturbance, do we believe the age, given the reference year?
+#### For stands with no recorded disturbance, do we believe the age, given the reference year?
 
 ``` {r Fig.ForestAge_NoDisturbance, fig.height=6, fig.width=9, dpi=200}
-ggplot(vri_bird_nodist, aes(x=PROJ_AGE_1)) + geom_histogram(bins=40) + myfacettheme3 + ylab("Number of bird surveys") + xlab("Stand Age")
+ggplot(vri_bird_nodist, aes(x=PROJ_AGE_1, fill=ReferenceYear)) + geom_histogram(bins=40) + myfacettheme3 + ylab("Number of Point Count Surveys") + xlab("Projected Stand Age (stands with no recorded disturbance)") + geom_vline(xintercept=c(0, 30, 80, 120, 250), col="red", linetype="dashed")  + annotate("text", label = "30 yrs", x = 32, y = 3950, size = 3, colour = "red") + 
+  annotate("text", label = "80 yrs", x = 82, y = 3950, size = 3, colour = "red") +
+  annotate("text", label = "120 yrs", x = 120, y = 3950, size = 3, colour = "red") +
+  annotate("text", label = "250 yrs", x = 250, y = 3950, size = 3, colour = "red") +
+  annotate("text", label = "0 yrs", x = 3, y = 3950, size = 3, colour = "red")
 ```
 
-Take a look at the stands with young forests
+**NOTES**
+
+* Many of the stands are indeed very old. 
+* But some are projected to be quite young. 
+
+**NextStep**
+
+* Understand where the age estimate is coming from -- data_source_age_cd
 
 ``` {r}
-vri_bird_nodist[vri_bird_nodist$PROJ_AGE_1 < 20,]
+t.agesrc <- as.data.frame(table(vri_bird_nodist$DATA_SOURCE_AGE_CD))
+colnames(t.agesrc)[1] <- c("CODE")
 
+agesrccd <- read.csv("data/LOOKUP.AgeDataSource.csv", header=T)
+t.agesrc <- merge(agesrccd[c("CODE", "DESCRIPTION")], t.agesrc, by="CODE", all.y=T)
+kable(t.agesrc, caption="Frequency of each source of age data within the polygons there is no disturbance record")
+```
+
+**NOTES**
+
+* Projected age is estimated most frequently from photointerpretation. 
+* `r nrow(vri_bird_nodist[is.na(vri_bird_nodist$DATA_SOURCE_AGE_CD),])` rows have no data source listed
+    * `r sum(vri_bird_nodist[is.na(vri_bird_nodist$DATA_SOURCE_AGE_CD),]$VRI_Layer == "Canfor_TFL")` are from Canfor. 
+
+**Decisions**
+
+* I will accept any stand where there is a data source listed for age. 
+* Of stands where there is no data source for age, I will accept Canfor ones.
+* of Forsite stands without data source for age, I will keep any with a non-blank nonforest descriptor
+* Of remaining rows/stands, I will keep any 200 yrs or older
+
+``` {r}
+nodist.discard.id <- vri_bird_nodist[is.na(vri_bird_nodist$DATA_SOURCE_AGE_CD),] # rows with no age data source
+nodist.discard.id <- nodist.discard.id[nodist.discard.id$VRI_Layer == "Forsite_VRI",] # Discarding those from Forsite VRI
+nodist.discard.id <- nodist.discard.id[nodist.discard.id$NON_PRODUCTIVE_DESCRIPTOR_CD %in% "",] #discarding stands if they don't have a non-forest code
+nodist.discard.id <- nodist.discard.id[nodist.discard.id$PROJ_AGE_1 %in% c(0:199),] # discarding 'younger' stands
+nodist.discard.id <- unique(nodist.discard.id$VRI.layer.polygon.ID)
+```
+
+##### create a reduced dataset where I trust the PROJ_AGE more or less, despite there being no record of disturbance
+
+``` {r}
+vri_bird_nodist <- vri_bird_nodist[!vri_bird_nodist$VRI.layer.polygon.ID %in% nodist.discard.id,]
 ```
 
 
-
-
+### Second, work through the three major scenarios based on when disturbance happens
 
 **Scenario subsets:**
 
-1. Disturbance happened before both bird survey and inventory
-2. Disturbance happened between bird survey and inventory year
-3. Disturbance happened after both bird survey and inventory year
-
-
-
-
-
+1. **Scenario 1:** Disturbance happened before both bird survey and inventory
+2. **Scenario 2:** Disturbance happened between bird survey and inventory year
+3. **Scenario 3:** Disturbance happened after both bird survey and inventory year
 
 ##### Create three datasets to reflect the 3 major scenarios based on when disturbance occurs. 
 
 ``` {r}
 vri_birdsurveys2$DisturbanceYear <- as.integer(vri_birdsurveys2$DisturbanceYear)
+
+vri_bird_scen1 <- vri_birdsurveys2
 
 vri_birdsurveys2[vri_birdsurveys2$DisturbanceYear < vri_birdsurveys2$YYYY,] 
                  

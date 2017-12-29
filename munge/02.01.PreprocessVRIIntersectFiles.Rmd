@@ -8,7 +8,7 @@ output:
 ---
 
 ## Script Abstract
-Check for duplicates and errors within the bird-intersected VRI data. Identify which columns are unique polygon/stand identifiers in the full VRI file and which can be used to intersect with the bird-intersected versions of the VRI dataset. Extract the corrected VRI data out of the full-VRI dataset based on the polygon identifiers intersected by bird data. Cache the full dataset and the one split into Canfor and Forsite as RData files.
+Check for duplicates and errors within the bird-intersected VRI data. Identify which columns are unique polygon/stand identifiers in the full VRI file and which can be used to intersect with the bird-intersected versions of the VRI dataset. Extract the corrected VRI data out of the full-VRI dataset based on the polygon identifiers intersected by bird data. Remove any obviously problematic polygons, such as those with inexplicably missing information (age = NA). Cache the full dataset and the one split into Canfor and Forsite as RData files. 
 
 
 ## Background
