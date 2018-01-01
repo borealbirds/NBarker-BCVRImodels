@@ -1,7 +1,7 @@
 ---
 title: "Filter for temporal alignment"
 author: "Nicole Barker"
-date: "Last run: Dec 29, 2017"
+date: "Last run: Jan 1, 2018"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -27,7 +27,7 @@ opts_knit$set(root.dir = '..')
 ```
 
 ``` {r load.project, message=F}
-○require(ProjectTemplate)
+require(ProjectTemplate)
 load.project()
 options(digits=12)
 ```
@@ -235,6 +235,9 @@ nodist.discard.id <- unique(nodist.discard.id$VRI.layer.polygon.ID)
 
 ##### create a reduced dataset where I trust the PROJ_AGE more or less, despite there being no record of disturbance
 
+Keep only stands passing the above criteria. 
+Note that I'm preserving on the stand basis, not bird survey basis. It's the stands that might be problematic here, not the relation to bird surveys. 
+
 ``` {r}
 vri_bird_nodist <- vri_bird_nodist[!vri_bird_nodist$VRI.layer.polygon.ID %in% nodist.discard.id,]
 ```
@@ -250,108 +253,173 @@ vri_bird_nodist <- vri_bird_nodist[!vri_bird_nodist$VRI.layer.polygon.ID %in% no
 
 ##### Create three datasets to reflect the 3 major scenarios based on when disturbance occurs. 
 
+Using the subset from above where there IS a value for disturbance. 
+
+**Scenario 1**
+
+![ ^^^ Image. Scenario 1](../metadata/VRI/AlignmentScenario1.jpg)
+
 ``` {r}
-vri_birdsurveys2$DisturbanceYear <- as.integer(vri_birdsurveys2$DisturbanceYear)
+vri_bird_dist$DisturbanceYear <- as.integer(vri_bird_dist$DisturbanceYear)
+vri_bird_dist$ReferenceYear <- as.integer(vri_bird_dist$ReferenceYear)
+vri_bird_dist$YYYY <- as.integer(vri_bird_dist$YYYY)
+vri_bird_dist$ProjectedYear <- as.integer(vri_bird_dist$ProjectedYear)
 
-vri_bird_scen1 <- vri_birdsurveys2
-
-vri_birdsurveys2[vri_birdsurveys2$DisturbanceYear < vri_birdsurveys2$YYYY,] 
-                 
-                 & vri_birdsurveys2$DisturbanceYear < vri_birdsurveys2$ReferenceYear,]
-
+vri_bird_scen1 <- subset(vri_bird_dist, 
+  ((vri_bird_dist$DisturbanceYear < vri_bird_dist$YYYY) & 
+  (vri_bird_dist$DisturbanceYear < vri_bird_dist$ReferenceYear)) |
+  ((vri_bird_dist$ReferenceYear == vri_bird_dist$DisturbanceYear) &
+  (vri_bird_dist$YYYY > vri_bird_dist$DisturbanceYear)))
 ```
 
+**Scenario 2**
+
+![ ^^^ Image. Scenario 2](../metadata/VRI/AlignmentScenario2.jpg)
+
+``` {r}
+vri_bird_scen2 <- subset(vri_bird_dist, 
+  ((vri_bird_dist$DisturbanceYear > vri_bird_dist$ReferenceYear) & 
+  (vri_bird_dist$DisturbanceYear < vri_bird_dist$YYYY)) | 
+  ((vri_bird_dist$DisturbanceYear > vri_bird_dist$YYYY) &
+  (vri_bird_dist$DisturbanceYear < vri_bird_dist$ReferenceYear)) |
+  ((vri_bird_dist$DisturbanceYear == vri_bird_dist$ReferenceYear) &
+  (vri_bird_dist$YYYY < vri_bird_dist$ReferenceYear)) |
+  ((vri_bird_dist$DisturbanceYear == vri_bird_dist$YYYY) &
+  (vri_bird_dist$ReferenceYear > vri_bird_dist$DisturbanceYear)) | 
+  ((all.equal(vri_bird_dist$ReferenceYear, vri_bird_dist$DisturbanceYear, vri_bird_dist$YYYY)))|
+  ((vri_bird_dist$DisturbanceYear == vri_bird_dist$YYYY) &
+  (vri_bird_dist$DisturbanceYear > vri_bird_dist$ReferenceYear))) 
+```
+
+
+**Scenario 3**
+
+![ ^^^ Image. Scenario 3](../metadata/VRI/AlignmentScenario3.jpg)
+``` {r}
+vri_bird_scen3 <- subset(vri_bird_dist, 
+  ((vri_bird_dist$DisturbanceYear > vri_bird_dist$ReferenceYear) & 
+  (vri_bird_dist$DisturbanceYear > vri_bird_dist$YYYY)))
+```
+
+**Check to make sure I've gotten all rows classed into a scenario**
+
+* Note that I ran this code several times and modified my subsets accordingly until no rows remained in the below test
+
+``` {r}
+scenario.rownames <- c(row.names(vri_bird_scen1), row.names(vri_bird_scen2), row.names(vri_bird_scen3))
+vri_bird_dist[!row.names(vri_bird_dist) %in% scenario.rownames,c("ReferenceYear", "DisturbanceYear", "YYYY")]
+```
 
 #### 1. Disturbance happened before both bird survey and inventory
 ![](../metadata/VRI/AlignmentScenario1.jpg)
 
 We think we trust bird surveys in this scenario, so I'm not doing any purging at this point.
+
+* `r nrow(vri_bird_scen1)` rows for `r length(unique(vri_bird_scen1$SS))` locations spanning `r min(vri_bird_scen1$YYYY)` to `r max(vri_bird_scen1$YYYY)`.
+
 ``` {r}
-
-
+kable(rbind(head(vri_bird_scen1[c("SS", "ReferenceYear", "DisturbanceYear", "YYYY", "AgeClass_calc", "HeightClass_calc", "BecZone")]),
+            tail(vri_bird_scen1[c("SS", "ReferenceYear", "DisturbanceYear", "YYYY", "AgeClass_calc", "HeightClass_calc", "BecZone")])), row.names=F)
 ```
-
 
 
 #### 2. Disturbance happened between bird survey and inventory year
 ![](../metadata/VRI/AlignmentScenario2.jpg)
 
-##### 2.a. A disturbance occurred after the inventory and before the bird survey. 
+We generally distrust this scenario. There's a small subset that might be salvagable, but it will likely take more time / effort than it's worth. We'll exclude all of these surveys. 
 
-
-
-
-##### 2.b. A disturbance occurred after the bird survey and before the inventory. 
-
-
+* `r nrow(vri_bird_scen2)` rows for `r length(unique(vri_bird_scen2$SS))` locations spanning `r min(vri_bird_scen2$YYYY)` to `r max(vri_bird_scen2$YYYY)`.
 
 
 #### 3. Disturbance happened after both bird survey and inventory year
 ![](../metadata/VRI/AlignmentScenario3.jpg)
 
+We generally trust this scenario. There's a small subset that might be problematic, where the 2014 VRI dataset was updated to reflect the disturbance... causing a mismatch with the bird conditions. Here I check if I can identify any rows fitting this condition. 
 
+* `r nrow(vri_bird_scen3)` rows for `r length(unique(vri_bird_scen3$SS))` locations spanning `r min(vri_bird_scen3$YYYY)` to `r max(vri_bird_scen3$YYYY)`.
 
+##### Subset: looking for stands where the projected info reflects the post-disturbance conditions, despite the reference year theoretically being prior to disturbance
 
+How would I identify these stands? 
 
+* If the projected age is within 5 years of the disturbance
 
+``` {r}
+vri_bird_scen3$PostDisturbanceAge <- vri_bird_scen3$ProjectedYear - vri_bird_scen3$DisturbanceYear
+range(vri_bird_scen3$PostDisturbanceAge)
 
-We make the assumption that the VRI file accurately describes the forest as of 2014*. There are a few ways the forest description may not accurately reflect what was on the ground when the birds were surveyed. 
-
-* **Mis-alignment type 1**. The point count survey conducted before a disturbance. Big problem because we have no idea what the forest conditions were like when the birds were sampled. We need to cut these points. They're indicated when `(VRI date - date of point count)` is negative. 
-
-* **Mis-alignment type 2**. Point count survey was conducted many years ago, and the forest has aged since then. The 2014 VRI shapefile will reflect an older forest than the birds experienced during the bird survey. This is potentially a smaller problem. 
-
-This doesn't even factor in the possibility that the data were not accurate as of 2014. 
-
-
-## How to determine if the VRI and point count data are temporally mis-aligned?
-
-* How old is forest stand?
-* How long ago was the point count conducted?
-
-``` {r, eval=F}
-rstands$HowLongPC <- 2014-rstands$YYYY
-colnames(rstands)[which(colnames(rstands)=="PROJ_AGE_1")] <- "HowOldForest"
-rstands$DiffPCandForAge <- rstands$HowOldForest - rstands$HowLongPC
-rstands$ForYoungerThanPC <- rstands$DiffPCandForAge < 0
-``` 
-
-### Misalignment Type 1. For how many sampling events are forest stands younger than the point count data?
-``` {r, eval=F}
-hist(as.numeric(rstands$ForYoungerThanPC), col="blue", main=NULL, xlab="Number of Mis-aligned Stands", breaks=2)
-rstands.print <- rstands[c("FEATURE_ID", "HowOldForest", "HowLongPC", "DiffPCandForAge", "ForYoungerThanPC")]
-
-
-Based on best available information, `r sum(as.numeric(rstands$ForYoungerThanPC))` of `r nrow(rstands)` sampling events (`r round(100*(sum(as.numeric(rstands$ForYoungerThanPC) / nrow(rstands))), 2)` %) were conducted before a disturbance. 
-
-`r kable(sample_n(rstands.print, 20), caption="Random 20 rows of ranked stands highlighting differences between projected forest age and when the point count survey in that stand was conducted", row.names=F)`
-
-
-#``` {r write.table, eval=F}
-write.table(rstands, file="data/BirdDataTemporalAlignment.csv", sep=",", row.names=F, col.names=T)
+range(vri_bird_scen3$PROJ_AGE_1)
 ```
 
-#### Now that we know which forest stands / point counts are potentially problematic, we can either:
-
-* Exclude the problematic samples / stands from the analyses
-* Update the VRI shapefile to have historically correct data based on pre-disturbance forest stand structure and then include those in the analysis
-
-To decide which path to take, we should evaluate how representation changes if we exclude all temporally misaligned point counts. 
-
-
-### Misalignment Type 2. What is the discrepancy between VRI attributes and bird point count data?
-
-``` {r, eval=F}
-rstands.non0 <- rstands[rstands$ForYoungerThanPC == FALSE,]
-
-
-####`r paste("Difference between point count (", min(rstands.non0$YYYY), "-", max(rstands.non0$YYYY),") and VRI (2014) data", sep="")`
-
-#``` {r, eval=F}
-hist(as.numeric(rstands.non0$HowLongPC), col="blue", main=NULL, xlab="No. of Years", breaks=15, ylab="No. Point Count Surveys")
+Look at stands that are quite old
+``` {r}
+tmp <- vri_bird_scen3[vri_bird_scen3$PROJ_AGE_1 > 30, c("ReferenceYear", "DisturbanceYear", "ProjectedYear", "PostDisturbanceAge", "PROJ_AGE_1", "EARLIEST_NONLOGGING_DIST_TYPE")]
+tmp <- tmp[order(tmp$PROJ_AGE_1, decreasing=T),]
+kable(rbind(head(tmp), tail(tmp)))
 ```
 
-What to do about these data? 
+* Looks like they were disturbed by insects (IBM is mountain pine beetle), but are still aged to their original stand age rather than post-insect outbreak. So can keep older stands, but I need to decide the threshold of young versus old. 
 
-* Age: Could be re-calculated based on "projected age" field in VRI dataset. Subtract the age of the point count data to get a new approximation of forest age. 
-* Height: ??? I don't know how age is projected, but presumably we could back-project from projected height. Or maybe we can re-project based on the base year used to generate the existing projected height. 
+Look at younger stands
+``` {r}
+tmp <- vri_bird_scen3[vri_bird_scen3$PROJ_AGE_1 <= 30, c("ReferenceYear", "DisturbanceYear", "ProjectedYear", "PostDisturbanceAge", "PROJ_AGE_1", "EARLIEST_NONLOGGING_DIST_TYPE", "VRI_Layer")]
+tmp <- tmp[order(tmp$PROJ_AGE_1, decreasing=T),]
+kable(rbind(head(tmp), tail(tmp)))
+```
+
+* Looks like Projected age in Canfor stands were updated after disturbances. And we don't have a reference year for Canfor stands, so let's just exclude Canfor stands from Scenario 3. 
+
+``` {r}
+dist.scen3.discard.id <- unique(vri_bird_scen3[vri_bird_scen3$VRI_Layer == "Canfor_TFL",]$VRI.layer.polygon.ID)
+vri_bird_scen3 <- vri_bird_scen3[!vri_bird_scen3$VRI.layer.polygon.ID %in% dist.scen3.discard.id,]
+```
+
+**NOTES**
+
+* Now that Canfor stands were removed, the youngest stand is `min(vri_bird_scen3$PROJ_AGE_1)` `r min(vri_bird_scen3$PROJ_AGE_1)`, which is much older than the youngest stand would be if it was dated to the last disturbance. Therefore, we can keep all these remaining stands. 
+* Not to mention that all of these stands were disturbed by IBM
+
+**DECISIONS**
+
+* Exclude Canfor stands from Scenario 3.
+* Keep remaining Scenario 3 stands. 
+
+### Recombine Various Scenarios
+
+``` {r}
+colstokeep <- colnames(vri_bird_nodist)
+vri_bird_tempaligned <- rbind(vri_bird_nodist[colstokeep],
+                              vri_bird_scen1[colstokeep],
+                              vri_bird_scen3[colstokeep])
+```
+
+#### Quality-check for duplicates
+
+``` {r}
+vri_bird_tempaligned$VRI.layer.polygon.ID.PKEY <- paste(vri_bird_tempaligned$VRI.layer.polygon.ID, vri_bird_tempaligned$PKEY, sep=".")
+
+duplicatedids <- vri_bird_tempaligned$VRI.layer.polygon.ID.PKEY[duplicated(vri_bird_tempaligned$VRI.layer.polygon.ID.PKEY)]
+
+vri_bird_tempaligned[vri_bird_tempaligned$VRI.layer.polygon.ID.PKEY %in% duplicatedids, c("VRI.layer.polygon.ID.PKEY", "PKEY")]
+
+```
+
+#### Save dataset for future use
+
+``` {r}
+cache("vri_bird_tempaligned")
+```
+
+**NOTES**
+
+* It appears that there are no duplicated bird survey/stand combinations after tearing apart the dataset and reassembling it. 
+
+**CONCLUSIONS**
+
+* For the time being, this will be my set of bird surveys used for subsequent analyses. I'll have to assume that the projected age and height will be sufficiently close to what the observed birds experienced that my models are meaningful.
+
+
+**Next Steps**
+
+* summarize the coverage of the various forest stand types with this temporally aligned dataset.
+
