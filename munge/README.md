@@ -30,9 +30,9 @@ Combines spatial data (SS), survey instance (PKEY), and point count (ABUND) data
 
 8. **02.01.PreprocessVRIIntersectFiles.Rmd** - Check for duplicates and errors within the bird-intersected VRI data. Identify which columns are unique polygon/stand identifiers in the full VRI file and which can be used to intersect with the bird-intersected versions of the VRI dataset. Extract the corrected VRI data out of the full-VRI dataset based on the polygon identifiers intersected by bird data. Remove any obviously problematic polygons, such as those with inexplicably missing information (age = NA). Cache the full dataset and the one split into Canfor and Forsite as RData files. 
 
-9. **02.02.FilterforTemporalAlighment.Rmd** - 
+9. **02.02.FilterforTemporalAlighment.Rmd** - Determine which dates from the VRI file I should look at when eliminating bird surveys. Explore data fitting various scenarios of alignment between bird survey, disturbance, and inventory date. Exclude data that probably have mismatches between what's in the VRI and what the birds experienced during the survey. 
 
-
+10. 
 
 Distance to edge. 
 

@@ -1,21 +1,135 @@
 ---
-title: "Prep Data for Analysis"
+title: "Filter for temporal alignment"
 author: "Nicole Barker"
-date: "December 12, 2017"
-output: html_document
+date: "Last run: Jan 1, 2018"
+output: 
+  word_document:
+    reference_docx: ../styles/ReportFormat_1.docx
 ---
 
-All point count data were included here, including all survey duration intervals and distance intervals. Also all behaviours. We want to exclude some of these. 
+## Script Abstract
 
-##### 
-
-
-
-**Notes**
-
-* There shouldn't be any non-occurrences in the database. i.e., if a species wasn't observed during a given survey, it isn't recorded in the database. We can check this by running `nrow(pcdat[pcdat$ABUND %in% 0,])`: `r nrow(pcdat[pcdat$ABUND %in% 0,])`.
-* For reasons I don't understand, some PKEYs have 0 ABUND. I'm not going to investigate this further, and just assume that there's a good reason. 
-* Either way, the 0s aren't there for all surveys, so I have to add them
+## Background
+In previous steps, I filtered date out based on mismatch between VRI data and bird surveys. However, I still need to do a bit more data processing before I can do analyses. 
 
 
-#### Adding the zeroes for all species/surveys 
+In this script: 
+
+* Subset to desired behaviours
+* I filter out any surveys with undesired survey duration intervals
+* I filter out any surveys with undesired survey distance intervals
+* I sum across species to develop a total bird count per survey 
+* I explore relationships between project (PCODE) and apparent total bird count
+
+**NOTE: I also plan to filter based on proximity of a point count to the stand edge (in a previous step), but I don't have the necessary information from Trish for that yet**
+
+``` {r setup, echo=F, message=F, warning=F}
+require(knitr)
+opts_knit$set(root.dir = '..')
+knitr::opts_chunk$set(
+  fig.path = "figures/"
+)
+```
+
+``` {r load.project, message=F}
+require(ProjectTemplate)
+load.project()
+options(digits=12)
+```
+
+### Subset to columns needed for exploration of bird counts per different survey methods
+
+``` {r}
+load("cache/vri_bird_tempaligned.RData") #(PKEYs quality-checked for use)
+colnames(vri_bird_tempaligned)
+#load("cache/vri_bird_tempaligned-distfiltered.RData") # this doesn't exist yet
+
+tmp <- read.csv("data/birddata_preprocess1.csv", header=T) # fuller bird dataset (with survey method details)
+
+birddat <- merge(vri_bird_tempaligned[c("PKEY")], tmp, by="PKEY", all.x=T)
+```
+
+### Subset to desired behaviours 
+
+Following Peter Solymos's guidelines (https://github.com/psolymos/bamanalytics/blob/master/R/dataprocessing.R) and keeping behaviours 1, 6, and 11. See table below for definitions. 
+
+``` {r}
+t.behav <- data.frame(table(birddat$BEH))
+colnames(t.behav) <- c("behcode", "NumObservations")
+
+lookup.behav <- read.csv("data/LOOKUP.BehaviourCodes.csv", header=T)
+lookup.behav <- lookup.behav[order(lookup.behav$behcode),]
+
+t.behav <- merge(lookup.behav, t.behav, all=T)
+t.behav$NumObservations[is.na(t.behav$NumObservations)] <- 0
+kable(t.behav, row.names=F)
+
+birddat2 <- birddat[birddat$BEH %in% c("1", "6", "11"),]
+```
+
+### Add methodologies
+
+Need to load method details from the projects summary and the definitions/descriptions of each duration and distance method code. 
+
+``` {r}
+projs <- read.csv("data/National_Proj_Summary_V4_2015.csv", header=T)
+colnames(projs)[which(colnames(projs) == "Method")] <- "METHOD" #change colname
+projs$Maxdist <- toupper(projs$Maxdist)
+
+birddat3 <- merge(birddat2, projs[c("METHOD", "MaxDuration", "Maxdist")], by="METHOD", all.x = T)
+
+```
+
+### Aggregate to "total bird" count per survey instance
+
+``` {r aggregate, eval=T}
+sumABUND <- aggregate(birddat3$ABUND,  by=list(PKEY=birddat3$PKEY), FUN=sum)
+colnames(sumABUND)[2] <- "sumABUND"
+
+speciesCOUNT <- aggregate(birddat3$ABUND,  by=list(PKEY=birddat3$PKEY), FUN=length) 
+colnames(speciesCOUNT)[2] <- "speciesCOUNT"
+
+tmp <- merge(sumABUND, speciesCOUNT, by="PKEY")
+
+birddat4 <- merge(tmp, birddat3[c("PKEY", "METHOD", "YYYY", "MaxDuration", "Maxdist")], by="PKEY")
+
+birddat4 <- birddat4[!duplicated(birddat4),]
+```
+
+
+
+### Load Peter's "total bird" offsets
+
+How many of my kept PKEYs do not have total bird offsets? 
+Is it worth Peter recalculating offsets for them?
+
+``` {r, eval=F}
+offsets <- read.csv("data/offset-species-2016-12-13.csv", header=T)
+cache("offsets")
+```
+
+``` {r}
+load("cache/offsets.RData")
+colnames(offsets)
+head(offsets$X)
+
+offsetpkeys <-offsets$X
+bcpkeys <- unique(birddat4$PKEY)
+```
+
+##### Which PKEYs from BC are not in Peter's offsets? 
+
+* `sum(bcpkeys %in% offsetpkeys)` `r sum(bcpkeys %in% offsetpkeys)` of `length(bcpkeys)` `r length(bcpkeys)` BC Pkeys have offsets
+* This suggests that `r length(bcpkeys) - sum(bcpkeys %in% offsetpkeys)` BC PKEYS do __not__ have offsets
+
+``` {r}
+df.offsettest <- data.frame(OFFSET="yes", PKEY=offsets$X)
+test <- merge(birddat4, df.offsettest, by="PKEY", all.x=T)
+
+nooffset <- test[is.na(test$OFFSET),]
+
+kable(rbind(head(nooffset), tail(nooffset)),)
+
+length(unique(nooffset$PKEY))
+```
+

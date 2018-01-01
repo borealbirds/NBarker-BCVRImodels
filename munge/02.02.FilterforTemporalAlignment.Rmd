@@ -7,7 +7,7 @@ output:
     reference_docx: ../styles/ReportFormat_1.docx
 ---
 ## Script Abstract
-
+Determine which dates from the VRI file I should look at when eliminating bird surveys. Explore data fitting various scenarios of alignment between bird survey, disturbance, and inventory date. Exclude data that probably have mismatches between what's in the VRI and what the birds experienced during the survey. 
 
 ## Background
 Bird data were collected any time between 1991 and the early 2010s. The VRI shapefile is from 2014. But we don't know when the photos were taken, or whether the time-dependent attributes were projected. 
@@ -24,6 +24,9 @@ In this script:
 ``` {r setup, echo=F, message=F, warning=F}
 require(knitr)
 opts_knit$set(root.dir = '..')
+knitr::opts_chunk$set(
+  fig.path = "figures/"
+)
 ```
 
 ``` {r load.project, message=F}
@@ -421,5 +424,6 @@ cache("vri_bird_tempaligned")
 
 **Next Steps**
 
+* Eliminate any surveys that are close to the polygon/stand edges. 
 * summarize the coverage of the various forest stand types with this temporally aligned dataset.
 
