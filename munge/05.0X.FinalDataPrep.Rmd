@@ -106,6 +106,7 @@ rm(birddat3)
 
 ### Aggregate to "total bird" count per survey instance
 
+
 ``` {r aggregate, eval=T}
 sumABUND <- aggregate(birddat3.5$ABUND,  by=list(PKEY=birddat3.5$PKEY), FUN=sum)
 colnames(sumABUND)[2] <- "sumABUND"
@@ -195,10 +196,8 @@ table(x$MaxDistance, useNA="a")
 phi_tota <- exp(0.2773876)
 tau_tota <- exp(0.8422723)
 x$p <- sra_fun(x$MaxDuration, phi_tota)
-x$A <- ifelse(is.finite(x$MaxDistance), 
-    x$MaxDistance^2*pi, tau_tota^2*phi_tota)
-x$q <- ifelse(is.finite(x$MaxDistance), 
-    edr_fun(x$MaxDistance, tau_tota), 1)
+x$A <- ifelse(is.finite(x$MaxDistance), x$MaxDistance^2*pi, tau_tota^2*phi_tota)
+x$q <- ifelse(is.finite(x$MaxDistance), edr_fun(x$MaxDistance, tau_tota), 1)
 summary(x$p)
 summary(x$A)
 summary(x$q)
@@ -233,6 +232,13 @@ bird_vri_dat_ready <- bird_vri_dat_ready[sort(colnames(bird_vri_dat_ready))]
 
 kable(bird_vri_dat_ready[sample(nrow(bird_vri_dat_ready), 10),c("ForID", "BecZone", "SpeciesGroup", "Age", "Height", "AgeClass_calc", "HeightClass_calc", "DisturbanceYear", "speciesCOUNT", "sumABUND")])
 ```
+
+### Check if offsets are the same within a given survey method
+
+``` {r}
+unique(bird_vri_dat_ready[bird_vri_dat_ready$METHOD %in% "BCCA:106",]$TOTA)
+```
+
 
 ``` {r}
 cache("bird_vri_dat_ready")

@@ -1,55 +1,230 @@
 ---
-title: "Ranks Versus Density"
+title: "Ranks vs. Bird Density"
 author: "Nicole Barker"
-date: "April 6, 2017"
+date: "Last updated: Jan 2, 2018"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
 ---
 
+##Script Abstract
+
+
 # Question: How well do ranks predict observed bird density?
 
-Approach: Simple regression of density (count with offset) ~ Rank
+## Approach 1. Descriptive plots of density vs. ranks
+
+**Steps **
+
+* Calculate the average (method/detectability-corrected) density for each forest stand type (ForID) that has at least one point count survey
+* To get the average per stand type, I basically build a mean-model (no covariates), which also corrects for method via offsets. 
+* Poisson GLM: Count + offset ~ ForID
+    * Forest stand type as predictor
+    * Count as response variable
+    * TOTA offset as offset 
+* Data subset: Those stand types that were sampled by at least one bird point count survey.
+
+
+
+## Approach 2. Quantitatively analyze relationship between density (count with offset) and Rank
+
 
 ``` {r setup, echo=F, message=F, warning=F}
 require(knitr)
 opts_knit$set(root.dir = '..')
+knitr::opts_chunk$set(
+  fig.path = "figures/"
+)
 ```
 
-```{r startup, echo=F, message=FALSE, warning=FALSE}
+``` {r load.project, message=F}
 require(ProjectTemplate)
-rm(list=ls())
 load.project()
+options(digits=12)
 ```
 
-```{r load.pointcountloc.data, echo=T, eval=T}
-load("cache/TOTAlcount.per.PKEY.withForID.RData")
-tota <- TOTAlcount.per.PKEY.withForID
-tota$SS <- as.character(tota$SS)
-tota <- merge(tota, mastermatrix[c("ForID", "SpeciesGroup", "BEC", "ForAge", "ForHt")], by="ForID")
-tota$BEC <- factor(tota$BEC)
-tota$Rank <- as.numeric(as.character(tota$Rank))
+
+## Load data
+
+``` {r}
+load("cache/bird_vri_dat_ready.RData")
+colnames(bird_vri_dat_ready)
+tota <- bird_vri_dat_ready
+colnames(tota)[which(colnames(tota) == "TOTA")] <- "Offset"
 ```
+
+### Filter out some data I want to exclude from ranks vs. bird density analysis
+
+**Stands that have been disturbed by insects**
+
+``` {r}
+tota.qs <- tota
+tota$EARLIEST_NONLOGGING_DIST_TYPE <- gsub(" *$", "", tota$EARLIEST_NONLOGGING_DIST_TYPE) # remove trailing white space
+nrow(tota[tota$EARLIEST_NONLOGGING_DIST_TYPE == "IBM",])
+tota <- subset(tota, tota$EARLIEST_NONLOGGING_DIST_TYPE != "IBM")
+```
+
+**Surveys with large numbers of birds**
+
+``` {r}
+summary(tota$sumABUND)
+nrow(tota[tota$sumABUND > 100,])
+tota <- subset(tota, tota$sumABUND < 100)
+```
+
+
+**Include only one survey per sampling location (SS)**
+
+A rigorous approach would be repeating model building with multiiple random sub-samples. However, I'm going to extract a single year of data from each SS that has multiple years of data. 
+
+I'll choose the specific year based on its proximity to the VRI reference year. This is just a matter of sorting based on Difference and keeping the first one. 
+
+``` {r}
+tota <- tota[order(tota$SS, tota$Difference_Bird_Photo),]
+
+dupSS <- tota$SS[duplicated(tota$SS)] # the duplicated SSs
+
+tota.nodup <- tota[!tota$SS %in% dupSS,]
+tota.dupl <- tota[tota$SS %in% dupSS,]
+
+kable(tota.dupl[1:25,c("SS", "PKEY", "Difference_Bird_Photo", "Age")])
+
+tota.dupl <- tota.dupl[!duplicated(tota$SS),] # cuts out all subsequently duplicated rows while keeping the first for each SS
+
+tota <- rbind(tota.nodup, tota.dupl)
+colnames(tota)[which(colnames(tota) == "sumABUND")] <- "Count"
+```
+
+
+## Approach 1. Descriptive plots of density vs. ranks
+
+### Calculating average density per forest stand type 
+
+Forest stand type is a factor with `r length(unique(tota$ForID))` levels
+
+``` {r fit.glm.forid, eval=T, echo=T}
+if ("fit.dens.forid_tot.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.forid_tot.RData")                    #on existence of cached model object.
+}
+
+if(!exists("fit.dens.forid_tot")) {
+  fit.dens.forid_tot <- glm(Count ~ ForID-1, family=poisson, data=tota, offset=Offset)
+  cache("fit.dens.forid_tot")
+  }
+```
+
+##### Calculate the number of birds in each forest stand type
+
+Use 'predict' on the simple model above to attribute the mean density value for each forest stand type, after correcting for survey method. 
+
+Only predicts to the forest stands we sampled. `r length(unique(tota$ForID))` unique stand types.
+
+Basically just takes the mean of all samples within a forest stand type and adjusts by the offset. No covariates in the above model.
+
+``` {r glm.forid.pred, eval=T}
+tota$Pred_fit.dens.forid_tot <- predict(fit.dens.forid_tot, newdata=tota, type="response")
+```
+
+##### Double-check that these predictions make sense. 
+Expectation: All point counts within the same forest stand type should have the same expected density, if I understand this analysis correctly. 
+
+``` {r}
+testset <- tota[tota$ForID %in% "SBS_SBPS.SwB_Decid.31_80.2",]
+testset <- testset[order(testset$Pred_fit.dens.forid_tot, decreasing = F),]
+testset$expOffset <- exp(testset$Offset)
+testset$PredDensity <- testset$Pred_fit.dens.forid_tot / exp(testset$Offset)
+kable(testset[1:10,c("ForID", "PKEY", "Pred_fit.dens.forid_tot", "expOffset", "Offset", "PredDensity")])
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### GLM of Density ~ Rank
 
-Treat forest stand rank (1-6) as continuous
+##### Treat forest stand rank (1-6) as continuous
+
+``` {r}
+tota2$Rank <- as.numeric(as.character(tota2$Rank))
+tota3 <- tota2[!is.na(tota2$Rank),]
+tota3 <- tota3[!is.na(tota3$Offset),]
+tota3 <- tota3[!is.na(tota3$sumABUND),]
+```
 
 ``` {r eval=T, echo=T}
-fit1 <- glm(Count ~ Rank, family=poisson, data=tota, offset=Offset)
+fit1 <- glm(sumABUND ~ Rank, family=poisson, data=tota3, offset=Offset)
 summary(fit1)
+par(mfrow=c(2,2))
+plot(fit1)
+par(mfrow=c(1,1))
+tota3$pred_fit1 <- predict(fit1, type="response")
+plot(tota3$pred_fit1 ~ tota3$sumABUND, xlab="Observed Abundance", ylab="Predicted Abundance")
 ```
 
 #### Repeat the analysis separately for each Bec Zone, to account for geographic variation
 
 ``` {r glm.dens.rank.bybec, echo=T}
-totas <- split(tota, tota$BEC)
-becglms <- lapply(totas, function(x) {
-  fitx <- glm(Count ~ Rank, family=poisson, data=x, offset=Offset)
+tota.becsplit <- split(tota, tota$BecZone)
+becglms <- lapply(tota.becsplit, function(x) {
+  fitx <- glm(sumABUND ~ Rank, family=poisson, data=x, offset=Offset)
 })
 
 sumresults <- do.call(rbind, lapply(1:length(becglms), function(i) {
-  data.frame(BEC=names(becglms[i]), Intercept=summary(becglms[[i]])$coefficients["(Intercept)","Estimate"], Rankvs.Density=summary(becglms[[i]])$coefficients["Rank","Estimate"], RankSE=summary(becglms[[i]])$coefficients["Rank","Std. Error"])
+  data.frame(
+    BecZone=names(becglms[i]), 
+    Intercept=summary(becglms[[i]])$coefficients["(Intercept)","Estimate"], 
+    Rankvs.Density=summary(becglms[[i]])$coefficients["Rank","Estimate"], 
+    RankSE=summary(becglms[[i]])$coefficients["Rank","Std. Error"])
 }))
 
 kable(sumresults, row.names=F)
@@ -58,10 +233,11 @@ rm(sumresults)
 
 #### Repeat the analysis separately for each species group, to account for tree productivity differences
 
+Note that I removed a couple of species groups because 
+
 ``` {r glm.dens.rank.byspp, eval=T, echo=T}
-totas <- split(tota, tota$SpeciesGroup)
-totas <- totas[-which(names(totas)%in% c(" ", "0", "999", ""))]
-spgrpglms <- lapply(totas[c(1:11,13:16, 18:21)], function(x) {
+tota.spsplit <- split(tota, tota$SpeciesGroup)
+spgrpglms <- lapply(tota.spsplit[c(1:11,13:16, 18:21)], function(x) {
   fitx <- glm(Count ~ Rank, family=poisson, data=x, offset=Offset)
 })
 
