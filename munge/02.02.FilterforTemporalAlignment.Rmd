@@ -169,7 +169,7 @@ kable(rbind(
 
 * Number of bird surveys where difference between bird survey and inventory reference year exceeds acceptable lag: `r sum(vri_birdsurveys$LagExceedsTolerated)` of `r nrow(vri_birdsurveys)`, leaving `r nrow(vri_birdsurveys) - sum(vri_birdsurveys$LagExceedsTolerated)` surveys. 
 
-##### Subset for those surveys within the tolerated lag
+##### Subset to keep those surveys within the tolerated lag
 
 ``` {r}
 vri_birdsurveys2 <- vri_birdsurveys[vri_birdsurveys$LagExceedsTolerated == 0,]
