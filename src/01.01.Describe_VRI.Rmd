@@ -1,11 +1,14 @@
 ---
 title: "Describe Ranks"
 author: "Nicole Barker"
-date: "Last run: Dec 19, 2017"
+date: "Last run: Jan 2, 2018"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
 ---
+
+## Script Abstract
+Describe how the forest stand ranks are distributed across forest stands, and in relation to other forest attributes (BecZone, SpeciesGroup, Age, Height). Many similiar figures representing the same information are shown - depending on the specific question, one figure may be better than another for conveying the information. 
 
 ``` {r setup, echo=F, message=F, warning=F}
 require(knitr)
@@ -29,12 +32,21 @@ We wish to know whether these ranks are reliable for decision making.
 
 ## 1. First, an overview of the ranks
 
-``` {r}
+**Old VRI File**
+
+``` {r, eval=F}
 vri <- read.csv("data/FORSITE_all_regions__Nicoles_VRI_fields_fixednames-zSpGroup.csv", header=T)
 colnames(vri)[which(colnames(vri) %in% "code_use")] <- "SpeciesGroup"
 vri$ForID <- with(vri, paste(BecZone, SpeciesGroup, Age, Height, sep="."))
 
 kable(data.frame(VRI_columnNames=colnames(vri)))
+```
+
+**New VRI File - fixed late December 2017**
+
+``` {r}
+load("cache/vri_forsite_postclean.RData")
+vri <- vri_forsite_postclean; rm(vri_forsite_postclean)
 ```
 
 **NOTES**
@@ -46,6 +58,7 @@ kable(data.frame(VRI_columnNames=colnames(vri)))
 Eliminate unranked stands, which is anything other than 1 through 6
 
 ``` {r}
+vri$ForID <- with(vri, paste(BecZone, SpeciesGroup, Age, Height, sep="."))
 vri <- vri[vri$Rank %in% 1:6,]
 ```
 
@@ -68,7 +81,9 @@ ggplot(vri, aes(x=Rank, fill=as.factor(Rank))) + geom_bar() + myfacettheme3 + yl
        
 ```
 
-Most stands are intermediate ranks, 2-5. Some are 1. Very few are 6. 
+**NOTES**
+
+* Most stands are intermediate ranks, 2-5. Some are 1. Very few are 6. 
 
 
 ### Distribution of ranks across forest attributer

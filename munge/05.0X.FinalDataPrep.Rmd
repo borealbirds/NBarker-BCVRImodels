@@ -1,5 +1,5 @@
 ---
-title: "Filter for temporal alignment"
+title: "Final Data Preparation"
 author: "Nicole Barker"
 date: "Last run: Jan 2, 2018"
 output: 
@@ -177,20 +177,63 @@ kable(rbind(head(nooffset), tail(nooffset)),)
 length(unique(nooffset$PKEY))
 ```
 
+#### Calculate offsets for the missing ones
+
+Code supplied by Peter Solymos on Jan 2, 2018
+
+``` {r, eval=T}
+require(QPAD)
+x <- nooffset
+str(x)
+table(x$MaxDuration, useNA="a")
+table(x$Maxdist, useNA="a")
+levels(x$Maxdist)[levels(x$Maxdist) == "Unlimited"] <- "Inf"
+x$MaxDistance <- as.numeric(as.character(x$Maxdist)) / 100
+table(x$MaxDistance, useNA="a")
+
+# numbers taken from estimates
+phi_tota <- exp(0.2773876)
+tau_tota <- exp(0.8422723)
+x$p <- sra_fun(x$MaxDuration, phi_tota)
+x$A <- ifelse(is.finite(x$MaxDistance), 
+    x$MaxDistance^2*pi, tau_tota^2*phi_tota)
+x$q <- ifelse(is.finite(x$MaxDistance), 
+    edr_fun(x$MaxDistance, tau_tota), 1)
+summary(x$p)
+summary(x$A)
+summary(x$q)
+
+x$Correction <- with(x, p * A * q)
+x$Offset <- log(x$Correction)
+summary(x$Offset)
+length(x$Offset)
+```
+
+``` {r}
+row.names(x) <- x$PKEY
+colnames(x)[which(colnames(x) == "Offset")] <- "TOTA"
+x <- x[c("TOTA", "PKEY")]
+tota2 <- rbind(tota, x)
+sum(duplicated(tota2$PKEY)) #none are duplicated!
+```
 
 #### Combine bird data with offsets
 
 ``` {r}
-birddat5 <- merge(birddat4, tota, by="PKEY", all.x=T)
+birddat5 <- merge(birddat4, tota2, by="PKEY", all.x=T)
 sum(is.na(birddat5$TOTA)) # how many PKEYs don't have offsets
 ```
 
 ### Combine bird data with VRI data
 
 ``` {r}
-dat1 <- merge(birddat5, vri_bird_tempaligned[-which(colnames(vri_bird_tempaligned) %in% c("FID_BIRD", "VRIintersectLayer", "OBJECTID", "FID_VRI", "BirdLayer", "MAP_ID", "POLYGON_ID", "OPENING_IND", "OPENING_SOURCE", "POLYGON_AREA", "INPUT_DATE", "INTERPRETATION_DATE", "REFERENCE_YEAR", "ATTRIBUTION_BASE_DATE", "PROJECTED_DATE", "OPENING_ID", "ORG_UNIT_NO", "ORG_UNIT_CODE", "polygon_area_cal", "FD_PERCENT", "PL_PERCENT", "AT_PERCENT", "VRI.layer.polygon.ID", "Difference_Bird_Photo", "ToleratedLag", "LagExceedsTolerated", "VRI.layer.polygon.ID.PKEY", "YYYY", "SS"))], by="PKEY", all.x=T)
-dat1 <- dat1[sort(colnames(dat1))]
+bird_vri_dat_ready <- merge(birddat5, vri_bird_tempaligned[-which(colnames(vri_bird_tempaligned) %in% c("FID_BIRD", "VRIintersectLayer", "OBJECTID", "FID_VRI", "BirdLayer", "MAP_ID", "POLYGON_ID", "OPENING_IND", "OPENING_SOURCE", "POLYGON_AREA", "INPUT_DATE", "INTERPRETATION_DATE", "REFERENCE_YEAR", "ATTRIBUTION_BASE_DATE", "PROJECTED_DATE", "OPENING_ID", "ORG_UNIT_NO", "ORG_UNIT_CODE", "FD_PERCENT", "PL_PERCENT", "AT_PERCENT", "VRI.layer.polygon.ID",  "ToleratedLag", "LagExceedsTolerated", "VRI.layer.polygon.ID.PKEY", "YYYY", "SS"))], by="PKEY", all.x=T)
+bird_vri_dat_ready$ForID <- with(bird_vri_dat_ready, paste(BecZone, SpeciesGroup, Age, Height, sep="."))
+bird_vri_dat_ready <- bird_vri_dat_ready[sort(colnames(bird_vri_dat_ready))]
 
-kable(dat1[sample(nrow(dat1), 10),c("BecZone", "SpeciesGroup", "Age", "Height", "AgeClass_calc", "HeightClass_calc", "DisturbanceYear", "speciesCOUNT", "sumABUND")])
+kable(bird_vri_dat_ready[sample(nrow(bird_vri_dat_ready), 10),c("ForID", "BecZone", "SpeciesGroup", "Age", "Height", "AgeClass_calc", "HeightClass_calc", "DisturbanceYear", "speciesCOUNT", "sumABUND")])
 ```
 
+``` {r}
+cache("bird_vri_dat_ready")
+```

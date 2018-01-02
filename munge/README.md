@@ -1,7 +1,7 @@
 ---
 title: "mungeREADME"
 author: "Nicole Barker"
-date: "November 28, 2017"
+date: "Jan 2, 2018"
 output: html_document
 ---
 
@@ -32,9 +32,9 @@ Combines spatial data (SS), survey instance (PKEY), and point count (ABUND) data
 
 9. **02.02.FilterforTemporalAlighment.Rmd** - Determine which dates from the VRI file I should look at when eliminating bird surveys. Explore data fitting various scenarios of alignment between bird survey, disturbance, and inventory date. Exclude data that probably have mismatches between what's in the VRI and what the birds experienced during the survey. 
 
-10. 
+10. Distance to edge. 
 
-Distance to edge. 
+11. Final data prep
 
 
 Then SRC 
