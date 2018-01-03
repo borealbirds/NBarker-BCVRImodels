@@ -1,7 +1,7 @@
 ---
 title: "Final Data Preparation"
 author: "Nicole Barker"
-date: "Last run: Jan 2, 2018"
+date: "Last run: Jan 3, 2018"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -178,13 +178,13 @@ kable(rbind(head(nooffset), tail(nooffset)),)
 length(unique(nooffset$PKEY))
 ```
 
-#### Calculate offsets for the missing ones
+#### Re-calculate offsets since we're missing a bunch 
 
-Code supplied by Peter Solymos on Jan 2, 2018
+Code supplied by Peter Solymos on Jan 2, 2018. Note that this method uses only max distance and max duration, so it only corrects for methodology. Not location- or time-specific covariates. 
 
 ``` {r, eval=T}
 require(QPAD)
-x <- nooffset
+x <- birddat4
 str(x)
 table(x$MaxDuration, useNA="a")
 table(x$Maxdist, useNA="a")
@@ -202,25 +202,35 @@ summary(x$p)
 summary(x$A)
 summary(x$q)
 
-x$Correction <- with(x, p * A * q)
-x$Offset <- log(x$Correction)
+x$Exposure <- with(x, p * A * q)
+x$Offset <- log(x$Exposure)
 summary(x$Offset)
 length(x$Offset)
 ```
 
-``` {r}
+
+#### Combine bird data with offsets
+
+**If applicable, recombine the calculated offsets with Peter's previously calculated offsets**
+
+As of Jan 3, 2017. I re-calculated all offsets using the simplified approach, so this chunk isn't necessary.
+
+``` {r eval=F}
 row.names(x) <- x$PKEY
 colnames(x)[which(colnames(x) == "Offset")] <- "TOTA"
 x <- x[c("TOTA", "PKEY")]
 tota2 <- rbind(tota, x)
 sum(duplicated(tota2$PKEY)) #none are duplicated!
-```
 
-#### Combine bird data with offsets
-
-``` {r}
 birddat5 <- merge(birddat4, tota2, by="PKEY", all.x=T)
 sum(is.na(birddat5$TOTA)) # how many PKEYs don't have offsets
+```
+
+**If re-calculating the offsets for all PKEYs, use the following chunk**
+
+``` {r}
+birddat5 <- x
+sum(is.na(birddat5$Offset)) # how many PKEYs don't have offsets
 ```
 
 ### Combine bird data with VRI data
@@ -236,9 +246,14 @@ kable(bird_vri_dat_ready[sample(nrow(bird_vri_dat_ready), 10),c("ForID", "BecZon
 ### Check if offsets are the same within a given survey method
 
 ``` {r}
-unique(bird_vri_dat_ready[bird_vri_dat_ready$METHOD %in% "BCCA:106",]$TOTA)
-```
+methods <- unique(bird_vri_dat_ready$METHOD)
 
+## function to look at unique offsets within a given method. Should have one value per row/method.
+kable(do.call(rbind, lapply(methods, function(x) {
+  unique(bird_vri_dat_ready[bird_vri_dat_ready$METHOD == x,]$Offset)
+})))
+
+```
 
 ``` {r}
 cache("bird_vri_dat_ready")

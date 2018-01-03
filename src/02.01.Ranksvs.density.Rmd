@@ -1,7 +1,7 @@
 ---
 title: "Ranks vs. Bird Density"
 author: "Nicole Barker"
-date: "Last updated: Jan 2, 2018"
+date: "Last updated: Jan 3, 2018"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -50,10 +50,17 @@ options(digits=12)
 load("cache/bird_vri_dat_ready.RData")
 colnames(bird_vri_dat_ready)
 tota <- bird_vri_dat_ready
-colnames(tota)[which(colnames(tota) == "TOTA")] <- "Offset"
+colnames(tota)[which(colnames(tota) == "TOTA")] <- "Offset" #Peter's offsets had "TOTA" as the column name. Mine had "offset". This changes Peter's column to the consistent one. 
 ```
 
 ### Filter out some data I want to exclude from ranks vs. bird density analysis
+
+**Stands that have ranks**
+
+``` {r}
+tota.qs <- tota
+tota <- subset(tota, tota$Rank %in% 1:6)
+```
 
 **Stands that have been disturbed by insects**
 
@@ -75,9 +82,9 @@ tota <- subset(tota, tota$sumABUND < 100)
 
 **Include only one survey per sampling location (SS)**
 
-A rigorous approach would be repeating model building with multiiple random sub-samples. However, I'm going to extract a single year of data from each SS that has multiple years of data. 
+A rigorous approach would involve repeating model building with multiple random sub-samples. However, in the interest of speed, I'm going to extract a single year of data from each SS that has multiple years of data. 
 
-I'll choose the specific year based on its proximity to the VRI reference year. This is just a matter of sorting based on Difference and keeping the first one. 
+I'll choose the specific year based on its proximity to the VRI reference year. This is just a matter of sorting based on (difference between reference year and bird survey year) and keeping the first one. 
 
 ``` {r}
 tota <- tota[order(tota$SS, tota$Difference_Bird_Photo),]
@@ -86,31 +93,71 @@ dupSS <- tota$SS[duplicated(tota$SS)] # the duplicated SSs
 
 tota.nodup <- tota[!tota$SS %in% dupSS,]
 tota.dupl <- tota[tota$SS %in% dupSS,]
+rm(tota)
 
 kable(tota.dupl[1:25,c("SS", "PKEY", "Difference_Bird_Photo", "Age")])
 
-tota.dupl <- tota.dupl[!duplicated(tota$SS),] # cuts out all subsequently duplicated rows while keeping the first for each SS
+tota.dupl <- tota.dupl[!duplicated(tota.dupl$SS),] # cuts out all subsequently duplicated rows while keeping the first for each SS
 
 tota <- rbind(tota.nodup, tota.dupl)
 colnames(tota)[which(colnames(tota) == "sumABUND")] <- "Count"
 ```
 
+**NOTES**
+
+* This keeps a total of `r length(unique(tota$SS))` locations, each with `r length(unique(tota$PKEY)) / length(unique(tota$SS))` PKEY. (should be 1. I haven't removed all duplicates if this number is > 1)
 
 ## Approach 1. Descriptive plots of density vs. ranks
+
+``` {r}
+hist(tota$Count)
+mean(tota$Count)
+var(tota$Count)
+```
+
 
 ### Calculating average density per forest stand type 
 
 Forest stand type is a factor with `r length(unique(tota$ForID))` levels
 
+**Load previously fit GLMs if they exist**
+
 ``` {r fit.glm.forid, eval=T, echo=T}
-if ("fit.dens.forid_tot.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
-  load("cache/fit.dens.forid_tot.RData")                    #on existence of cached model object.
+if ("fit.dens.forid_tot_pois.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.forid_tot_pois.RData")                    #on existence of cached model object.
 }
 
-if(!exists("fit.dens.forid_tot")) {
-  fit.dens.forid_tot <- glm(Count ~ ForID-1, family=poisson, data=tota, offset=Offset)
-  cache("fit.dens.forid_tot")
-  }
+if ("fit.dens.forid_tot_quasi.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.forid_tot_quasi.RData")                    #on existence of cached model object.
+}
+
+```
+
+**Run GLMs if they don't exist**
+
+``` {r, warning=F, message=F}
+if(!exists("fit.dens.forid_tot_pois")) {
+  fit.dens.forid_tot_pois <- glm(Count ~ ForID-1, family=poisson, data=tota, offset=Offset)
+  cache("fit.dens.forid_tot_pois")
+}
+
+if(!exists("fit.dens.forid_tot_quasi")) {
+  fit.dens.forid_tot_quasi <- glm(Count ~ ForID-1, family=quasipoisson, data=tota, offset=Offset)
+  cache("fit.dens.forid_tot_quasi")
+}
+
+library(arm)
+cpois <-    coef(fit.dens.forid_tot_pois) #estimate
+e.cpois <- exp(cpois)                     #expected value
+s1 <- se.coef(fit.dens.forid_tot_pois)    #standard error
+
+cquasi <-    coef(fit.dens.forid_tot_quasi)
+e.cquasi <- exp(cquasi)
+squasi <- se.coef(fit.dens.forid_tot_quasi)
+
+coeftab <- as.data.frame(cbind(cpois, e.cpois, s1, cquasi, e.cquasi, squasi))
+head(coeftab)
+
 ```
 
 ##### Calculate the number of birds in each forest stand type
@@ -122,7 +169,8 @@ Only predicts to the forest stands we sampled. `r length(unique(tota$ForID))` un
 Basically just takes the mean of all samples within a forest stand type and adjusts by the offset. No covariates in the above model.
 
 ``` {r glm.forid.pred, eval=T}
-tota$Pred_fit.dens.forid_tot <- predict(fit.dens.forid_tot, newdata=tota, type="response")
+tota$Pred_fit.dens.forid_tot_pois <- predict(fit.dens.forid_tot_pois, newdata=tota, type="response")
+kable(tota[1:10,c("PKEY", "ForID", "Pred_fit.dens.forid_tot_pois", "Offset")])
 ```
 
 ##### Double-check that these predictions make sense. 
@@ -131,292 +179,49 @@ Expectation: All point counts within the same forest stand type should have the 
 ``` {r}
 testset <- tota[tota$ForID %in% "SBS_SBPS.SwB_Decid.31_80.2",]
 testset <- testset[order(testset$Pred_fit.dens.forid_tot, decreasing = F),]
-testset$expOffset <- exp(testset$Offset)
-testset$PredDensity <- testset$Pred_fit.dens.forid_tot / exp(testset$Offset)
-kable(testset[1:10,c("ForID", "PKEY", "Pred_fit.dens.forid_tot", "expOffset", "Offset", "PredDensity")])
+testset$PredxExposure <- testset$Pred_fit.dens.forid_tot * testset$Exposure
+testset$PredByExposure <- testset$Pred_fit.dens.forid_tot / testset$Exposure
+kable(testset[1:10,c("ForID", "PKEY", "Pred_fit.dens.forid_tot_pois", "Exposure", "Offset", "PredxExposure", "PredByExposure")], row.names=F, digits=3)
 ```
 
+**NOTES**
 
+* Predictions are not the same for all polygons within a forest stand type. See the top two rows for an example. 
+* Let's work through the logic of an offset in a Poisson model...
+    * Count distributed as Poisson(exposure x expected density)
+    * Linear predictor = log(exposure) + log(expected density)
+    * log(exposure) = Offset
+    * exp(Offset) is exposure
+    * Response variable = count?
+    * Expected count = exposure x expected density ?
+    * Expected density =  Expected count / exposure 
+    * So how do I estimate density if I don't have an offset??? e.g., trying to predict to unsampled locations. 
 
+**MORE NOTES**
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-### GLM of Density ~ Rank
-
-##### Treat forest stand rank (1-6) as continuous
+* I emailed a bit with Peter Solymos on Jan 3, 2018. 
+    * You want the offsets to be 0 for prediction. I do not use the predict function, but `model.matrix()` to get the design matrix for the new data set and `X %*% coef()`.
 
 ``` {r}
-tota2$Rank <- as.numeric(as.character(tota2$Rank))
-tota3 <- tota2[!is.na(tota2$Rank),]
-tota3 <- tota3[!is.na(tota3$Offset),]
-tota3 <- tota3[!is.na(tota3$sumABUND),]
-```
-
-``` {r eval=T, echo=T}
-fit1 <- glm(sumABUND ~ Rank, family=poisson, data=tota3, offset=Offset)
-summary(fit1)
-par(mfrow=c(2,2))
-plot(fit1)
-par(mfrow=c(1,1))
-tota3$pred_fit1 <- predict(fit1, type="response")
-plot(tota3$pred_fit1 ~ tota3$sumABUND, xlab="Observed Abundance", ylab="Predicted Abundance")
-```
-
-#### Repeat the analysis separately for each Bec Zone, to account for geographic variation
-
-``` {r glm.dens.rank.bybec, echo=T}
-tota.becsplit <- split(tota, tota$BecZone)
-becglms <- lapply(tota.becsplit, function(x) {
-  fitx <- glm(sumABUND ~ Rank, family=poisson, data=x, offset=Offset)
-})
-
-sumresults <- do.call(rbind, lapply(1:length(becglms), function(i) {
-  data.frame(
-    BecZone=names(becglms[i]), 
-    Intercept=summary(becglms[[i]])$coefficients["(Intercept)","Estimate"], 
-    Rankvs.Density=summary(becglms[[i]])$coefficients["Rank","Estimate"], 
-    RankSE=summary(becglms[[i]])$coefficients["Rank","Std. Error"])
-}))
-
-kable(sumresults, row.names=F)
-rm(sumresults)
-```
-
-#### Repeat the analysis separately for each species group, to account for tree productivity differences
-
-Note that I removed a couple of species groups because 
-
-``` {r glm.dens.rank.byspp, eval=T, echo=T}
-tota.spsplit <- split(tota, tota$SpeciesGroup)
-spgrpglms <- lapply(tota.spsplit[c(1:11,13:16, 18:21)], function(x) {
-  fitx <- glm(Count ~ Rank, family=poisson, data=x, offset=Offset)
-})
-
-sumresults <- do.call(rbind, lapply(1:length(spgrpglms), function(i) {
-  data.frame(BEC=names(spgrpglms[i]), Intercept=summary(spgrpglms[[i]])$coefficients["(Intercept)","Estimate"], Rankvs.Density=summary(spgrpglms[[i]])$coefficients["Rank","Estimate"], RankSE=summary(spgrpglms[[i]])$coefficients["Rank","Std. Error"])
-}))
-
-kable(sumresults, row.names=F)
-ggplot(sumresults, aes(x=BEC, y=Rankvs.Density)) + geom_point() + geom_hline(yintercept=0, col="red") + myfacettheme + ylim(-1,1)
-
-rm(sumresults)
-```
-
-#### Repeat the analysis separately for each combination of species group and bec, to account for tree productivity differences
-
-``` {r glm.dens.rank.bybec.byspp, eval=T, echo=T}
-tota.sub <- tota[!tota$SpeciesGroup %in% c("Pa", "PyFd_Decid"),]
-tota$becspp <- paste(tota$BEC, tota$SpeciesGroup, sep=".")
-totas <- split(tota, tota$becspp)
-totas <- totas[-c(1,  5,  7, 21, 25, 27, 39, 43, 63, 80, 81, 82)]
-
-becspgrpglms <- lapply(totas, function(x) {
-  fitx <- glm(Count ~ Rank, family=poisson, data=x, offset=Offset)
-})
-
-sumresults <- lapply(1:length(becspgrpglms), function(i) {
-  summary(becspgrpglms[[i]])$coefficients
-})
-
-sumresults <- do.call(rbind, lapply(1:length(becspgrpglms), function(i) {
-  data.frame(BEC=names(becspgrpglms[i]), Intercept=summary(becspgrpglms[[i]])$coefficients["(Intercept)","Estimate"], Rankvs.Density=summary(becspgrpglms[[i]])$coefficients["Rank","Estimate"], RankSE=summary(becspgrpglms[[i]])$coefficients["Rank","Std. Error"])
-}))
-
-sumresults <- sumresults[order(sumresults$Rankvs.Density, decreasing=T),]
-
-kable(sumresults, row.names=F)
-kable(head(sumresults[order(sumresults$Rankvs.Density, decreasing=T),],10), row.names=F)
-kable(tail(sumresults[order(sumresults$Rankvs.Density, decreasing=T),],10), row.names=F)
-
-names(sumresults)[1] <- "BEC.Species"
-sumresults$BEC <- unlist(lapply(strsplit(as.character(sumresults$BEC.Species), ".", fixed=T), function(x){x[1]}))
-sumresults$SpeciesGroup <- unlist(lapply(strsplit(as.character(sumresults$BEC.Species), ".", fixed=T), function(x){x[2]}))
-
-ggplot(sumresults, aes(x=SpeciesGroup, y=Rankvs.Density)) + geom_point() + geom_hline(yintercept=0, col="red") + myfacettheme + ylim(-1,1) + facet_wrap(~BEC)
-
+X <- model.matrix(fit.dens.forid_tot_pois)
+tota$mm.preds <- X %*% coef(fit.dens.forid_tot_pois)
+testset <- tota[tota$ForID %in% "SBS_SBPS.SwB_Decid.31_80.2",]
+testset <- testset[order(testset$Pred_fit.dens.forid_tot, decreasing = F),]
+testset$PredxExposure <- testset$Pred_fit.dens.forid_tot * testset$Exposure
+testset$PredByExposure <- testset$Pred_fit.dens.forid_tot / testset$Exposure
+kable(testset[1:10,c("ForID", "PKEY", "Pred_fit.dens.forid_tot_pois", "Exposure", "Offset", "PredxExposure", "PredByExposure", "mm.preds")], row.names=F, digits=3)
 
 ```
 
+### Plotting correspondance between Forest stand ranks and their average observed density (in sampled stands)
 
-**Conclusion:** performance of rank for density dpeends on combination of bec and sp group.
+``` {r plot.foriddens.rank.corr, eval=F}
+tota$EstDensity <- tota$Pred_fit.dens.forid_tot / exp(tota$Offset) 
 
-``` {r}
-reps <- read.csv("data/Output/BirdSamplingStandTypes-cleaned.2017.04.04.csv", header=T)
-becspcountSS <- aggregate(reps$TotalCountSS, by=list(BEC=reps$BEC, SpeciesGroup=reps$SpeciesGroup), FUN=function(x){sum(x, na.rm=T)})
-colnames(becspcountSS)[ncol(becspcountSS)] <- "CountSS"
-becspcountSS$BEC.Species <- paste(becspcountSS$BEC, becspcountSS$SpeciesGroup, sep=".") 
+ggplot(tota, aes(x=as.factor(Rank), y=EstDensity, group=as.factor(Rank), fill=as.factor(Rank))) + geom_boxplot() + xlab("Rank") + ylab("EstDensity")
 
-becsparea <- aggregate(reps$ForestArea, by=list(BEC=reps$BEC, SpeciesGroup=reps$SpeciesGroup), FUN=function(x){sum(x, na.rm=T)})
-colnames(becsparea)[ncol(becsparea)] <- "ForestArea"
-becsparea$BEC.Species <- paste(becsparea$BEC, becsparea$SpeciesGroup, sep=".") 
+ggplot(tota, aes(x=as.factor(Rank), y=EstDensity, group=as.factor(Rank), col=as.factor(Rank), fill=as.factor(Rank))) + geom_violin() + myfacettheme + xlab("Rank") + ylab("EstDensity")
 
-becsp <- merge(becspcountSS, becsparea[c("BEC.Species", "ForestArea")], by="BEC.Species")
-
-sumresults2 <- merge(sumresults, becsp[c("BEC.Species", "ForestArea", "CountSS")], by="BEC.Species", all.x=T)
-
-sumresults2 <- sumresults2[order(sumresults2$CountSS, decreasing=T),]
-kable(sumresults2, row.names=F)
-```
-
-#### Repeat the analysis including a Rank^2 term. Will maybe give us an idea of why the ranks don't correlate with density.
-
-``` {r glm.dens.rank.rank2.bybec.byspp, eval=F, echo=T}
-tota.sub <- tota[!tota$SpeciesGroup %in% c("Pa", "PyFd_Decid"),]
-tota$becspp <- paste(tota$BEC, tota$SpeciesGroup, sep=".")
-tota$Rank2 <- tota$Rank^2
-totas <- split(tota, tota$becspp)
-
-
-becspgrpglms <- lapply(totas, function(x) {
-  fitx <- glm(Count ~ Rank + Rank*Rank, family=poisson, data=x, offset=Offset)
-})
-
-removethese <- which(unlist (lapply(1:length(becspgrpglms), function(i) {nrow(summary(becspgrpglms[[i]])$coefficients)}))<3)
-
-totas <- totas[-removethese]
-
-becspgrpglms <- lapply(totas, function(x) {
-  fitx <- glm(Count ~ Rank + Rank*Rank, family=poisson, data=x, offset=Offset)
-})
-
-sumresults <- lapply(1:length(becspgrpglms), function(i) {
-  summary(becspgrpglms[[i]])$coefficients
-})
-
-sumresults <- do.call(rbind, lapply(1:length(becspgrpglms), function(i) {
-  data.frame(BEC=names(becspgrpglms[i]), Intercept=summary(becspgrpglms[[i]])$coefficients["(Intercept)","Estimate"], Rankvs.Density=summary(becspgrpglms[[i]])$coefficients["Rank","Estimate"],
-RankSE=summary(becspgrpglms[[i]])$coefficients["Rank","Std. Error"],
-Rank2vs.Density=summary(becspgrpglms[[i]])$coefficients["Rank2","Estimate"],
-Rank2SE=summary(becspgrpglms[[i]]$coefficients["Rank2", "Std. Error"]))
-}))
-
-sumresults <- do.call(rbind, lapply(1:length(becspgrpglms), function(i) {
-  data.frame(BEC=names(becspgrpglms[i]), Intercept=summary(becspgrpglms[[i]])$coefficients["(Intercept)","Estimate"], Rankvs.Density=summary(becspgrpglms[[i]])$coefficients["Rank","Estimate"], RankSE=summary(becspgrpglms[[i]])$coefficients["Rank","Std. Error"])
-}))
-
-sumresults <- sumresults[order(sumresults$Rankvs.Density, decreasing=T),]
-
-kable(sumresults, row.names=F)
-kable(head(sumresults[order(sumresults$Rankvs.Density, decreasing=T),],10), row.names=F)
-kable(tail(sumresults[order(sumresults$Rankvs.Density, decreasing=T),],10), row.names=F)
-
-names(sumresults)[1] <- "BEC.Species"
-sumresults$BEC <- unlist(lapply(strsplit(as.character(sumresults$BEC.Species), ".", fixed=T), function(x){x[1]}))
-sumresults$SpeciesGroup <- unlist(lapply(strsplit(as.character(sumresults$BEC.Species), ".", fixed=T), function(x){x[2]}))
-
-ggplot(sumresults, aes(x=SpeciesGroup, y=Rankvs.Density)) + geom_point() + geom_hline(yintercept=0, col="red") + myfacettheme + ylim(-1,1) + facet_wrap(~BEC)
-```
-
-
-**Conclusion:** performance of rank for density dpeends on combination of bec and sp group.
-
-``` {r}
-reps <- read.csv("data/Output/BirdSamplingStandTypes-cleaned.2017.04.04.csv", header=T)
-becspcountSS <- aggregate(reps$TotalCountSS, by=list(BEC=reps$BEC, SpeciesGroup=reps$SpeciesGroup), FUN=function(x){sum(x, na.rm=T)})
-colnames(becspcountSS)[ncol(becspcountSS)] <- "CountSS"
-becspcountSS$BEC.Species <- paste(becspcountSS$BEC, becspcountSS$SpeciesGroup, sep=".") 
-
-becsparea <- aggregate(reps$ForestArea, by=list(BEC=reps$BEC, SpeciesGroup=reps$SpeciesGroup), FUN=function(x){sum(x, na.rm=T)})
-colnames(becsparea)[ncol(becsparea)] <- "ForestArea"
-becsparea$BEC.Species <- paste(becsparea$BEC, becsparea$SpeciesGroup, sep=".") 
-
-becsp <- merge(becspcountSS, becsparea[c("BEC.Species", "ForestArea")], by="BEC.Species")
-
-sumresults2 <- merge(sumresults, becsp[c("BEC.Species", "ForestArea", "CountSS")], by="BEC.Species", all.x=T)
-
-sumresults2 <- sumresults2[order(sumresults2$CountSS, decreasing=T),]
-kable(sumresults2, row.names=F)
-```
-
-
-## Try re-running glm after omitting youngest age class
-``` {r}
-tota_older <- tota[!tota$ForAge %in% "3_30",]
-
-tota.sub <- tota_older[!tota_older$SpeciesGroup %in% c("Pa", "PyFd_Decid"),]
-tota.sub$becspp <- paste(tota.sub$BEC, tota.sub$SpeciesGroup, sep=".")
-totasubs <- split(tota.sub, tota.sub$becspp)
-
-becspgrpglms <- lapply(totasubs, function(x) {
-  fitx <- glm(Count ~ Rank, family=poisson, data=x, offset=Offset)
-})
-
-removethese <- which(unlist (lapply(1:length(becspgrpglms), function(i) {nrow(summary(becspgrpglms[[i]])$coefficients)}))==1)
-
-totasubs <- totasubs[-removethese]
-
-becspgrpglms <- lapply(totasubs, function(x) {
-  fitx <- glm(Count ~ Rank, family=poisson, data=x, offset=Offset)
-})
-
-sumresults_noyoung <- do.call(rbind, lapply(1:length(becspgrpglms), function(i) {
-  data.frame(BEC=names(becspgrpglms[i]), Intercept=summary(becspgrpglms[[i]])$coefficients["(Intercept)","Estimate"], Rankvs.Density=summary(becspgrpglms[[i]])$coefficients["Rank","Estimate"], RankSE=summary(becspgrpglms[[i]])$coefficients["Rank","Std. Error"])
-}))
-
-sumresults_noyoung <- sumresults_noyoung[order(sumresults_noyoung$Rankvs.Density, decreasing=T),]
-
-kable(sumresults_noyoung, row.names=F)
-kable(head(sumresults_noyoung[order(sumresults_noyoung$Rankvs.Density, decreasing=T),],10), row.names=F)
-kable(tail(sumresults_noyoung[order(sumresults_noyoung$Rankvs.Density, decreasing=T),],10), row.names=F)
-
-names(sumresults_noyoung)[1] <- "BEC.Species"
-sumresults_noyoung$BEC <- unlist(lapply(strsplit(as.character(sumresults_noyoung$BEC.Species), ".", fixed=T), function(x){x[1]}))
-sumresults_noyoung$SpeciesGroup <- unlist(lapply(strsplit(as.character(sumresults_noyoung$BEC.Species), ".", fixed=T), function(x){x[2]}))
-colnames(sumresults_noyoung)[which(colnames(sumresults_noyoung)=="Rankvs.Density")] <- "Rankvs.Density_noyoung"
-
-ggplot(sumresults_noyoung, aes(x=SpeciesGroup, y=Rankvs.Density_noyoung)) + geom_point() + geom_hline(yintercept=0, col="red") + myfacettheme + ylim(-1,1) + facet_wrap(~BEC)
-
-test <- merge(sumresults, sumresults_noyoung[c("BEC.Species","Rankvs.Density_noyoung")], by="BEC.Species")
-kable(test[c("BEC.Species", "Rankvs.Density","Rankvs.Density_noyoung")], row.names=F)
 ```
 
 
@@ -424,31 +229,47 @@ kable(test[c("BEC.Species", "Rankvs.Density","Rankvs.Density_noyoung")], row.nam
 
 
 
-### GLM of Density ~ Rank
 
-Treat rank as a factor to see if those results are different.
 
-``` {r eval=T, echo=T}
-tota$Rank <- as.factor(tota$Rank)
-fit1 <- glm(Count ~ Rank, family=poisson, data=tota, offset=Offset)
-summary(fit1)
 
-```
 
-Looks like density for each rank is slightly higher than density for rank 1, with exception of rank 6...which has roughly the same density as rank1.
 
-#### Repeat separately for each Bec Zone
-``` {r eval=T, echo=T}
-totas <- split(tota, tota$BEC)
-becglms <- lapply(totas, function(x) {
-  fitx <- glm(Count ~ Rank, family=poisson, data=x, offset=Offset)
-})
 
-sumresults <- do.call(rbind, lapply(1:length(becglms), function(i) {
-  data.frame(BEC=names(becglms[i]), Intercept=summary(becglms[[i]])$coefficients["(Intercept)","Estimate"], Rank2=summary(becglms[[i]])$coefficients["Rank2","Estimate"], Rank3=summary(becglms[[i]])$coefficients["Rank3","Estimate"],
-Rank4=summary(becglms[[i]])$coefficients["Rank4","Estimate"],
-Rank5=summary(becglms[[i]])$coefficients["Rank5","Estimate"])
-}))
 
-kable(sumresults, row.names=F)
-```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
