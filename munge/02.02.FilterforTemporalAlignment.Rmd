@@ -1,7 +1,7 @@
 ---
 title: "Filter for temporal alignment"
 author: "Nicole Barker"
-date: "Last run: Jan 4, 2018"
+date: "Last run: Jan 5, 2018"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -422,6 +422,15 @@ duplicatedids <- vri_bird_tempaligned$VRI.layer.polygon.ID.PKEY[duplicated(vri_b
 
 vri_bird_tempaligned[vri_bird_tempaligned$VRI.layer.polygon.ID.PKEY %in% duplicatedids, c("VRI.layer.polygon.ID.PKEY", "PKEY")]
 
+```
+
+#### Add back in offsets
+
+``` {r}
+bird.offsets <- birds[c("PKEY", "Exposure", "Offset")]
+bird.offsets <- bird.offsets[!duplicated(bird.offsets),]
+
+vri_bird_tempaligned <- merge(vri_bird_tempaligned, bird.offsets, by="PKEY", all.x=T)
 ```
 
 #### Save dataset for future use

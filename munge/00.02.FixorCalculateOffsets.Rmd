@@ -242,7 +242,7 @@ nrow(new.ss)
 covar.ss <- offtz[c("SS", "tree", "NALCMS05", "TZID", "FID_tz_wor", "POINT_X", "POINT_Y")]
 covar.ss <- covar.ss[!duplicated(covar.ss),]
 
-birddat2 <- birddat1[c("SS", "METHOD", "YYYY", "MaxDuration", "Maxdist", "PCODE")]
+birddat2 <- birddat1[c("SS", "METHOD", "YYYY", "MaxDuration", "Maxdist", "PCODE", "StartTime", "DD", "MM")]
 birddat2 <- birddat2[!duplicated(birddat1),]
 
 new.dat.for.offsets <- merge(birddat2, covar.ss, by="SS", all.x = T)
@@ -268,10 +268,13 @@ length(ss.missingcovar)
 ##### Combine with PKEY by SS to make a table of covariates required to calculate offsets by PKEY
 
 ``` {r}
-pkey.ss <- birddat1[c("PKEY", "SS")]
-pkey.ss <- pkey.ss[!duplicated(pkey.ss),]
+pkey <- read.csv("data/BC_COFI_PKEY.txt")
+colnames(pkey)
+pkey.ss.date.time <- pkey[c("PKEY", "MM", "DD", "StartTime")] 
+pkey.ss.date.time$SS <- unlist(lapply(strsplit(as.character(pkey.ss.date.time$PKEY), ":", fixed=T), function(x) {paste(x[1:3], collapse=":")}))
+pkey.ss.date.time <- pkey.ss.date.time[!duplicated(pkey.ss.date.time),]
 
-new.dat.for.offsets2 <- merge(new.dat.for.offsets, pkey.ss, by="SS", all.x = T)
+new.dat.for.offsets2 <- merge(new.dat.for.offsets, pkey.ss.date.time, by="SS", all.x = T)
 new.dat.for.offsets2 <- merge(new.dat.for.offsets2, pkey.has.offsets[c("PKEY", "hastotaoffset")], by="PKEY", all.x=T)
 
 kable(new.dat.for.offsets2[sample(nrow(new.dat.for.offsets2), 15),], row.names=F)
@@ -286,7 +289,9 @@ as.data.frame(do.call(rbind, lapply(new.dat.for.offsets2, function(x) {sum(is.na
 ```
 
 ```{r}
+
 write.table(new.dat.for.offsets2, "output/new.dat.for.offsets.csv", col.names=T, row.names=F, sep=",")
+
 ```
 
 #### Re-calculate offsets since we're missing a bunch 
@@ -342,6 +347,6 @@ sum(is.na(birddat5$TOTA)) # how many PKEYs don't have offsets
 ### Cache pre-processed bird data
 
 ``` {r}
-birddata_preprocess2_withOffset <- x
+birddata_preprocess2_withOffset <- x[-which(colnames(x) %in% c("DURMETH", "DISTMETH", "p", "A", "q"))]
 cache("birddata_preprocess2_withOffset")
 ```

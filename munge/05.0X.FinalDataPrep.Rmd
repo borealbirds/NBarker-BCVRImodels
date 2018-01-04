@@ -1,29 +1,27 @@
 ---
 title: "Final Data Preparation"
 author: "Nicole Barker"
-date: "Last run: Jan 3, 2018"
+date: "Last run: Jan 4, 2018"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
 ---
 
-I need to re-do this code, adapting it for the fact that method is added at an earlier stage. 
-
-
-
-
-
 ## Script Abstract
 
 ## Background
-In previous steps, I filtered date out based on mismatch between VRI data and bird surveys. However, I still need to do a bit more data processing before I can do analyses. 
+In previous steps: 
+
+* I added offsets into the table
+* I filtered dates based on mismatch between VRI data and bird surveys
+* I expect to filter based on proximity of point count to stand edge once that data is available. NOT CURRENTLY DONE. 
+
+However, I still need to do a bit more data processing before I can do analyses. 
 
 
 In this script: 
 
 * Subset to desired behaviours
-* I filter out any surveys with undesired survey duration intervals
-* I filter out any surveys with undesired survey distance intervals
 * I sum across species to develop a total bird count per survey 
 * I explore relationships between project (PCODE) and apparent total bird count
 
