@@ -95,8 +95,9 @@ myfacettheme4 <- theme_grey() +
 palrank <- colorRampPalette(brewer.pal(9, "PuRd"))
 palrank <- palrank(8)[3:8]
 
-# Height
 
+# Density
+paldens <- colorRampPalette(c("#ffffcb", "#f3e11f", "#4ccc31", "#048707", "#1b558a", "#150d62"))
 
 # BecZone
 palbec <- c("#ff0000", #BG_PP

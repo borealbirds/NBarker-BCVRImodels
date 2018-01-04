@@ -118,6 +118,8 @@ tmp <- merge(sumABUND, speciesCOUNT, by="PKEY")
 
 birddat4 <- merge(tmp, birddat3.5[c("PKEY", "METHOD", "SS", "YYYY", "MaxDuration", "Maxdist", "durationClass", "distanceClass")], by="PKEY")
 
+birddat4$PCODE <- unlist(lapply(strsplit(as.character(birddat4$SS), ":", fixed=T), function(x) {x[1]}))
+
 birddat4 <- birddat4[!duplicated(birddat4),]
 ```
 
@@ -162,6 +164,8 @@ totapkeys <- tota$PKEY
 * `sum(bcpkeys %in% totapkeys)` `r sum(bcpkeys %in% totapkeys)` of `r length(bcpkeys)` BC Pkeys have offsets
 * This suggests that `r length(bcpkeys) - sum(bcpkeys %in% totapkeys)` BC PKEYS do __not__ have offsets
 
+##### Which PKEYs don't have offsets? 
+
 ``` {r}
 df.offsettest <- data.frame(OFFSET.indivspp="yes", PKEY=offsets$X)
 test <- merge(birddat4, df.offsettest, by="PKEY", all.x=T)
@@ -173,9 +177,126 @@ test$BothMissing <- (test$OFFSET.indivspp == "yes") & (test$OFFSET.tota == "yes"
 nooffset <- test[is.na(test$BothMissing),]
 write.table(nooffset, "output/BCdat_nooffset_2018.01.02.csv", sep=",", row.names = F, col.names = T)
 
+nooffset$PCODE <- unlist(lapply(strsplit(as.character(nooffset$SS), ":", fixed=T), function(x) {x[1]}))
+
 kable(rbind(head(nooffset), tail(nooffset)),)
 
 length(unique(nooffset$PKEY))
+
+unique(nooffset$PCODE)
+```
+
+##### Examine covariates Trish sent to Peter to understand why we're missing offsets for so many PKEYS
+
+``` {r}
+offcovar <- read.csv("data/covariatesforoffsetMay2017.csv", header=T)
+colnames(offcovar)
+unique(offcovar$PCODE)
+
+offtz <- read.csv("data/covariatesforoffsetMay2017Timezone.csv", header=T)
+colnames(offtz)
+unique(offcovar$PCODE)
+```
+
+**Initial Notes**
+
+* Looks like all PCODEs (projects) missing offsets are in Trish's covariate data
+* This suggests that there was an error in creating the offsets -- somehow these projects were excluded. 
+* I'll check for a couple of individual SSs rather than PCODES
+
+``` {r}
+randomss.nooff <- sample(nooffset$SS, 10)
+offcovar[offcovar$SS %in% randomss.nooff,]
+offtz[offtz$SS %in% randomss.nooff,]
+```
+
+* Only `r sum(offtz$SS %in% randomss.nooff)` of the SS without offsets are in the covariate datafile
+* Somehow some of the SS from the BC data are missing covariates. 
+    * Which ones? 
+    
+    
+##### STEPS  
+
+* Identify which PKEYs are in the new PCODES
+* How many of them have tota offsets from Peter's May update? 
+* How many of them don't have tota offsets from Peter's May update? 
+* How many of them have covariates from the file sent to Peter in May? 
+* How many of them don't have covariates in the file sent to Peter in May? 
+
+**PKEYS in PCODES that have missing offsets**
+
+``` {r}
+new.pcodes <- c(unique(as.character(nooffset$PCODE)), unique(as.character(offcovar$PCODE))) #pcodes with missing offsets
+new.pcodes <- data.frame(PCODE=new.pcodes[!duplicated(new.pcodes)]) #pcodes with missing offsets
+new.pkeys <- merge(new.pcodes, birddat4, by="PCODE", all.x=T) #PKEYS in those PCODES
+nrow(new.pkeys) #how many PKEYS do we need new offsets for
+
+new.ss <- merge(new.pcodes, birddat4[c("METHOD", "SS", "YYYY", "MaxDuration", "Maxdist", "PCODE")], by="PCODE", all.x=T) #PKEYS in those PCODES
+new.ss  <- new.ss[!duplicated(new.ss),]
+nrow(new.ss)
+```
+
+**SS with tota offsets from May update**
+
+* Offsets are generated on a per-PKEY basis
+* But covariates are provided on a per-SS basis, so I need to extract SS from this offset file
+
+``` {r}
+pkey.has.offsets <- data.frame(PKEY=unique(tota$PKEY), hastotaoffset="yes")
+pkey.has.offsets$SS <- unlist(lapply(strsplit(as.character(pkey.has.offsets$PKEY), ":", fixed=T), function(x) {paste(x[1:3], collapse=":")}))
+ss.has.offsets <- pkey.has.offsets[c("SS", "hastotaoffset")]
+ss.has.offsets <- ss.has.offsets[!duplicated(ss.has.offsets),]
+
+new.ss <- merge(new.ss, ss.has.offsets, by="SS", all.x=T)
+
+new.ss$hastotaoffset <- as.character(new.ss$hastotaoffset)
+new.ss$hastotaoffset[is.na(new.ss$hastotaoffset)] <- "no"
+kable(rbind(head(new.ss), tail(new.ss)))
+
+sum(new.ss$hastotaoffset == "yes")
+sum(new.ss$hastotaoffset == "no")
+nrow(new.ss)
+```
+
+**SS in covariate file Trish sent to Peter in May**
+
+``` {r}
+tmp <- as.data.frame(do.call(rbind,lapply(offcovar, function(x) { length(unique(x))})))
+colnames(tmp) <- c("Num.Unique.Values")
+kable(tmp)
+
+(has.offset.covars <- data.frame(PCODE=unique(offcovar$PCODE), hascovar="yes"))
+new.pkeys <- merge(new.pkeys, has.offset.covars, by="PCODE", all.x=T)
+
+new.pkeys$hascovar <- as.character(new.pkeys$hascovar)
+new.pkeys$hascovar[is.na(new.pkeys$hascovar)] <- "no"
+kable(rbind(head(new.pkeys), tail(new.pkeys)))
+
+sum(new.pkeys$hascovar == "yes")
+sum(new.pkeys$hascovar == "no")
+nrow(new.pkeys)
+
+
+(has.offsettz <- data.frame(PCODE=unique(offtz$PCODE), hasofftz="yes"))
+new.pkeys <- merge(new.pkeys, has.offsettz, by="PCODE", all.x=T)
+
+new.pkeys$hasofftz <- as.character(new.pkeys$hasofftz)
+new.pkeys$hasofftz[is.na(new.pkeys$hasofftz)] <- "no"
+kable(rbind(head(new.pkeys), tail(new.pkeys)))
+
+sum(new.pkeys$hasofftz == "yes")
+sum(new.pkeys$hasofftz == "no")
+nrow(new.pkeys)
+```
+
+**Create table with PKEYs and other covariates needed to generate offsets**
+
+``` {r}
+covar.ss <- offtz[c("PCODE", "SS", "tree", "NALCMS05", "TZID", "FID_tz_wor")]
+covar.ss <- covar.ss[!duplicated(covar.ss),]
+
+new.pkeys.withcovar <- merge(new.pkeys[c("SS", "METHOD", "YYYY", "MaxDuration", "Maxdist", "hastotaoffset", "hascovar", "hasofftz")], covar.ss, by="SS", all.x = T)
+
 ```
 
 #### Re-calculate offsets since we're missing a bunch 

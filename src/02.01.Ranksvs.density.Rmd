@@ -1,5 +1,5 @@
 ---
-title: title: "Bird Density vs. Ranks & Forest Attributes - SAMPLED STANDS" 
+title: "Bird Density vs. Ranks & Forest Attributes - SAMPLED STANDS" 
 author: "Nicole Barker"
 date: "Last updated: Jan 3, 2018"
 output: 
@@ -232,9 +232,9 @@ kable(testset[1:10,c("ForID", "PKEY", "Pred_fit.dens.forid_tot_pois", "Exposure"
     * We also discussed that the coefs are group means, and therefore I don't even need to use 'predict' for this step. I double-checked that the predict means matched the coefs and they do. Yay. 
 
 
-### Plotting correspondance between Forest stand ranks and their average observed density (in sampled stands)
+### Plotting correspondance between ranks and average observed density (in sampled stand types)
 
-``` {r plot.foriddens.rank.corr, eval=F}
+``` {r plot.foriddens.rank.corr, eval=T}
 tota$EstDensity <- tota$Pred_fit.dens.forid_tot_pois 
 
 ggplot(tota, aes(x=as.factor(Rank), y=EstDensity, group=as.factor(Rank), fill=as.factor(Rank))) + geom_boxplot() + xlab("Matrix Stand Rank") + ylab("Bird Density (# pairs/ha)") + myfacettheme2 + guides(fill=FALSE) + scale_fill_manual(values=palrank) 
