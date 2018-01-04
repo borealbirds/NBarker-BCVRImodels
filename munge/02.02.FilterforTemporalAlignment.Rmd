@@ -1,7 +1,7 @@
 ---
 title: "Filter for temporal alignment"
 author: "Nicole Barker"
-date: "Last run: Jan 1, 2018"
+date: "Last run: Jan 4, 2018"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -40,6 +40,7 @@ options(digits=12)
 ``` {r}
 load("cache/intersect_both.RData")
 vri_intersect <- intersect_both; rm(intersect_both)
+colnames(vri_intersect)
 ```
 
 ### Possible dates to consider
@@ -102,11 +103,15 @@ The resulting projection will be as reliable as the model, so we perhaps have le
 **Merge the intersected VRI polygons with the point count survey information (pkey)**
 
 ``` {r}
-birds <- read.csv("data/birddata_preprocess1.csv", header=T)
+load("cache/birddata_preprocess2_withOffset.RData")
+birds <- birddata_preprocess2_withOffset
+colnames(birds)
 birdsurveys <- birds[c("PKEY", "SS", "YYYY")]
 birdsurveys <- birdsurveys[!duplicated(birdsurveys),]
+head(birdsurveys)
 
 vri_birdsurveys <- merge(vri_intersect, birdsurveys, by="SS") #keep only bird surveys where I have forest stand info for)
+vri_birdsurveys <- vri_birdsurveys[!duplicated(vri_birdsurveys),]
 ``` 
 
 **NOTE**
@@ -125,6 +130,7 @@ ggplot(vri_birdsurveys, aes(x=Difference_Bird_Photo, fill=DisturbanceYear)) + ge
 
 * Many rows removed in the creation of that figure? Why? 
     * Canfor doesn't have REFERENCE_DATE or REFERENCE_YEAR. Will just have to trust that the dataset was updated recently and I don't need to worry about time lags between when inventory was done and the projected date. 
+    * `r nrow(vri_birdsurveys[is.na(vri_birdsurveys$Difference_Bird_Photo),])`
 
 #### Replace canfor's ReferenceYear with the YYYY from the bird surveys, since I agreed to accept these dates. 
 
@@ -132,6 +138,17 @@ ggplot(vri_birdsurveys, aes(x=Difference_Bird_Photo, fill=DisturbanceYear)) + ge
 vri_birdsurveys[vri_birdsurveys$VRI_Layer == "Canfor_TFL",]$ReferenceYear <- vri_birdsurveys[vri_birdsurveys$VRI_Layer == "Canfor_TFL",]$YYYY
 vri_birdsurveys$Difference_Bird_Photo <- vri_birdsurveys$YYYY - as.numeric(vri_birdsurveys$ReferenceYear) #recalculate difference between bird survey and reference year
 ```
+
+* Still `r nrow(vri_birdsurveys[is.na(vri_birdsurveys$Difference_Bird_Photo),])` rows without a Difference. Some are because bird point count data are missing YYYY, so I'll just cut those. 
+
+#### Cut any remaining rows where we can't calculate Difference_Bird_Photo
+
+``` {r}
+vri_birdsurveys <- vri_birdsurveys[!is.na(vri_birdsurveys$Difference_Bird_Photo),]
+```
+
+* Now `r nrow(vri_birdsurveys[is.na(vri_birdsurveys$Difference_Bird_Photo),])` rows without a Difference. 
+
 
 ### Cut out data if the time lag between bird survey and reference year is too great
 
