@@ -1,7 +1,7 @@
 ---
 title: "00.01.MergeAvianFiles"
 author: "Nicole Barker"
-date: "Last run: Dec. 14, 2017"
+date: "Last run: Jan 4, 2017"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -26,6 +26,7 @@ This script does the following
 * Look for and eliminate duplications
 * Correct any errors noticed during pre-processing
 * Save a pre-processed table of point count data for future use: data/birddata_preprocess1.csv 
+* 
 
 
 ``` {r setup, echo=F, message=F, warning=F}
@@ -46,12 +47,28 @@ xy<- read.csv("data/BC_COFI_XY.csv")
 kable(head(xy), row.names=F)
 ```
 
+**Checking for Missing Data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind,lapply(xy, function(x) {sum(is.na(x))}))))
+```
+
 ##### Remove any SS without x and y coordinates
 ``` {r remove.no.coordinates, eval=T}
 xy.qs <- xy
 xy <- xy[!is.na(xy$X),]
 xy <- xy[xy$X != 0,]
 ```
+
+**Checking for Missing Data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind,lapply(xy, function(x) {sum(is.na(x))}))))
+
+```
+
+
+
 
 **Notes**
 
@@ -74,49 +91,70 @@ It's useful to look at a map for this. Kathy Martin's data represents a good exa
 
 ``` {r load.pkey}
 pkey <- read.csv("data/BC_COFI_PKEY.txt")
-kable(head(pkey), row.names=F)
+kable(rbind(head(pkey), tail(pkey)), row.names=F)
+unique(pkey$METHOD)
+```
+
+**Checking for Missing Data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind, lapply(pkey, function(x) {sum(is.na(x))}))))
 ```
 
 ``` {r merge.xy.pkey, eval=T}
+length(unique(xy$SS))
+length(unique(xy$PCODE))
 xy.pkey <- merge(xy[c("PCODE", "SS", "X", "Y")], 
-               pkey[c("SS", "METHOD", "SITE", "STN", "ROUND", "PKEY", "YYYY", "MM", "DD", "StartTime", "obs")], by="SS", all.x=T)
-xy.pkey$DATE <- as.Date(paste(xy.pkey$YYYY, xy.pkey$MM, xy.pkey$DD, sep="/"))
-xy.pkey$PCODE.SITE <- paste(xy.pkey$PCODE, xy.pkey$SITE, sep=".")
+               pkey[c("PCODE", "SS", "METHOD", "SITE", "STN", "ROUND", "PKEY", "YYYY", "MM", "DD", "StartTime", "obs")], 
+               by="SS",
+               all=T)
+xy.pkey$PCODE_derived <- unlist(lapply(strsplit(as.character(xy.pkey$SS), ":"), function(x) {x[1]}))
+xy.pkey$PCODE.SITE <- paste(xy.pkey$PCODE_derived, xy.pkey$SITE, sep=".")
+```
+
+**Checking for Missing Data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind, lapply(xy.pkey, function(x) {sum(is.na(x))}))))
 ```
 
 ##### Fix Dates
 
-* remove sites without dates. The following PCODEs all have at least one SS without a MM: `r unique(xy.pkey[is.na(xy.pkey$MM),]$PCODE)`
+* remove sites without dates. The following PCODEs all have at least one SS without a MM: `r unique(xy.pkey[is.na(xy.pkey$MM),]$PCODE)` --> I since decided to keep in those without MM, for now. 
 * Switch MM and DD for GMSMON15
 
 ``` {r fix.dates, eval=T}
 xy.pkey.qs <- xy.pkey
-xy.pkey <- xy.pkey[!is.na(xy.pkey$MM),]
-xy.pkey <- xy.pkey[xy.pkey$MM != 0,]
+#xy.pkey <- xy.pkey[!is.na(xy.pkey$MM),]
+#xy.pkey <- xy.pkey[xy.pkey$MM != 0,]
 
-sort(unique(xy.pkey$MM)) #just checking for NA or 0 values
+unique(xy.pkey$MM) #just checking for NA or 0 values
 ```
 
-Well I'm pretty sure no surveys were done in Nov and Dec, so this probably indicates a switch in MM and DD for some sites. Time to track down which ones 
+**ERROR NOTICED** - I'm pretty sure no surveys were done in Nov and Dec, so this probably indicates a switch in MM and DD for some sites. Time to track down which ones 
 
 ``` {r}
 xy.pkey$MM.old <- xy.pkey$MM
 xy.pkey$DD.old <- xy.pkey$DD
 xy.pkey <- xy.pkey[order(xy.pkey$YYYY, xy.pkey$SS),]
 
-kable(rbind(head(xy.pkey[xy.pkey$PCODE %in% "GMSMON15", c("PCODE", "SS", "YYYY", "MM", "DD")], 10), tail(xy.pkey[xy.pkey$PCODE %in% "GMSMON15", c("PCODE", "SS", "YYYY", "MM", "DD")], 10)), row.names=F)
+kable(rbind(head(xy.pkey[xy.pkey$PCODE_derived %in% "GMSMON15", c("PCODE_derived", "SS", "YYYY", "MM", "DD", "MM.old")], 10), tail(xy.pkey[xy.pkey$PCODE_derived %in% "GMSMON15", c("PCODE_derived", "SS", "YYYY", "MM", "DD", "MM.old")], 10)), row.names=F)
 
-xy.pkey$DD[xy.pkey$PCODE %in% "GMSMON15" & xy.pkey$YYYY == "2012"] <- xy.pkey$MM.old[xy.pkey$PCODE %in% "GMSMON15" & xy.pkey$YYYY == "2012"] 
+xy.pkey$DD[xy.pkey$PCODE_derived %in% "GMSMON15" & xy.pkey$YYYY == "2012"] <- xy.pkey$MM.old[xy.pkey$PCODE_derived %in% "GMSMON15" & xy.pkey$YYYY == "2012"] 
 
-xy.pkey$MM[xy.pkey$PCODE %in% "GMSMON15" & xy.pkey$YYYY == "2012"] <-
-  xy.pkey$DD.old[xy.pkey$PCODE %in% "GMSMON15" & xy.pkey$YYYY == "2012"]
+xy.pkey$MM[xy.pkey$PCODE_derived %in% "GMSMON15" & xy.pkey$YYYY == "2012"] <-
+  xy.pkey$DD.old[xy.pkey$PCODE_derived %in% "GMSMON15" & xy.pkey$YYYY == "2012"]
 
-kable(rbind(head(xy.pkey[xy.pkey$PCODE %in% "GMSMON15" & xy.pkey$YYYY == "2012",c("PCODE", "SS", "YYYY", "MM", "DD")]),
-            tail(xy.pkey[xy.pkey$PCODE %in% "GMSMON15" & xy.pkey$YYYY == "2012",c("PCODE", "SS", "YYYY", "MM", "DD")])), row.names=F)
+kable(rbind(head(xy.pkey[xy.pkey$PCODE_derived %in% "GMSMON15" & xy.pkey$YYYY == "2012",c("PCODE_derived", "SS", "YYYY", "MM", "DD")]),
+            tail(xy.pkey[xy.pkey$PCODE_derived %in% "GMSMON15" & xy.pkey$YYYY == "2012",c("PCODE_derived", "SS", "YYYY", "MM", "DD")])), row.names=F)
 unique(xy.pkey$MM)
 ```
 
 Alright, so that fixed the obvious date issues. Let's look at some other potential data problems. 
+
+``` {r}
+xy.pkey$DATE <- as.Date(paste(xy.pkey$YYYY, xy.pkey$MM, xy.pkey$DD, sep="/"))
+```
 
 **Notes**
 
@@ -269,7 +307,7 @@ After that, I hope there aren't any duplicates left.
 
 **FILES**
 
-1. **EC_AVIAN_CORE_20150324.csv**
+1. **BC_COFI_POINTCOUNT.csv**
 
 ``` {r load.pcdat, eval=T}
 #load point count data
@@ -288,6 +326,7 @@ pcdat2 <- merge(pcdat1, codes, by="SPECIES", all.x=T)
 #subset for necessary columns
 pcdat <- pcdat2[c(colnames(pcdat1), "English_Name")]
 pcdat <- pcdat[order(pcdat$PKEY),]
+
 kable(rbind(head(pcdat), tail(pcdat)), row.names=F, caption="First 6 and last 6 rows")
 ```
 
@@ -320,44 +359,201 @@ codes[duplicated(codes$SPECIES),] #finding that duplicated species code...
 
 #### Combine PC dat with xy.pkey and write to a file for future use
 
-Testing to see which PKEY have no bird data, and which bird data have no associated spatial data
+##### First, check which PKEY have no bird data, and which bird data have no associated spatial data
 
 ``` {r}
-xy.pkey.pc1 <- merge(xy.pkey[c("PCODE", "SITE", "STN", "METHOD", "YYYY", "MM", "DD", "ROUND", "StartTime", "SS", "PKEY")], pcdat, by="PKEY", all.x =T) # merge with all pkey with xy coordinates, regardless of presence of bird data
+xy.pkey.pc1 <- merge(xy.pkey[c("SITE", "STN", "METHOD", "YYYY", "MM", "DD", "ROUND", "StartTime", "PKEY")], pcdat, by="PKEY", all.x =T) # merge with all pkey in the xy or pkey table, regardless of presence of bird data
 
-head(xy.pkey.pc1[is.na(xy.pkey.pc1$ABUND),])
+kable(rbind(head(xy.pkey.pc1[is.na(xy.pkey.pc1$ABUND),]),
+            tail(xy.pkey.pc1[is.na(xy.pkey.pc1$ABUND),])))
+
+``` 
+
+**Check for Missing Data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind,lapply(xy.pkey.pc1, function(x) {sum(is.na(x))})))) # check for missing data
 ```
 
 `r length(xy.pkey.pc1[is.na(xy.pkey.pc1$ABUND),]$PKEY)` unique PKEYs have no bird data associated with them. In PCODEs: `r unique(xy.pkey.pc1[is.na(xy.pkey.pc1$ABUND),]$PCODE)`
 
 ``` {r}
-xy.pkey.pc2 <- merge(xy.pkey[c("PCODE", "SITE", "STN", "METHOD", "YYYY", "MM", "DD", "ROUND", "StartTime", "SS", "PKEY")], pcdat, by="PKEY", all.y =T) # merge with all abund data, regardless of presence of xy coordinates
+xy.pkey.pc2 <- merge(xy.pkey[c("SITE", "STN", "METHOD", "YYYY", "MM", "DD", "ROUND", "StartTime", "PKEY")], pcdat, by="PKEY", all.y =T) # merge with all abund data, regardless of presence in xy or pkey tables
 
-head(xy.pkey.pc2[is.na(xy.pkey.pc2$PCODE),])
+kable(rbind(head(xy.pkey.pc2[is.na(xy.pkey.pc2$PCODE_derived),]),
+            tail(xy.pkey.pc2[is.na(xy.pkey.pc2$PCODE_derived),])))
 
-xy.pkey.pc2$PCODE_derived <- unlist(lapply(strsplit(as.character(xy.pkey.pc2$PKEY), ":"), function(x) {x[1]}))
+``` 
 
+**Check for Missing Data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind, lapply(xy.pkey.pc2, function(x) {sum(is.na(x))})))) # check for missing data
 ```
 
 `r length(unique(xy.pkey.pc2[is.na(xy.pkey.pc2$PCODE),]$PKEY))` unique PKEYs have bird data, but are missing some element from survey method such as spatial location, date, etc. In PCODEs: `r unique(xy.pkey.pc2[is.na(xy.pkey.pc2$PCODE),]$PCODE_derived)`
 
 ``` {r}
+xy.pkey.pc3 <- merge(xy.pkey[c("SITE", "STN", "METHOD", "YYYY", "MM", "DD", "ROUND", "StartTime", "PKEY")], pcdat, by="PKEY", all =T) # keeps all pkeys even if missing some data
 
-xy.pkey.pc3 <- merge(xy.pkey[c("PCODE", "SITE", "STN", "METHOD", "YYYY", "MM", "DD", "ROUND", "StartTime", "SS", "PKEY")], pcdat, by="PKEY", all =T) # keeps all pkeys even if missing some data
+``` 
 
+**Check for Missing Data**
+
+``` {r}
+
+kable(as.data.frame(do.call(rbind,lapply(xy.pkey.pc3, function(x) {sum(is.na(x))})))) # check for missing data
 ```
 
 ``` {r}
-xy.pkey.pc4 <- merge(xy.pkey[c("PCODE", "SITE", "STN", "METHOD", "YYYY", "MM", "DD", "ROUND", "StartTime", "SS", "PKEY")], pcdat, by="PKEY") # merge only where we have all data
+xy.pkey.pc4 <- merge(xy.pkey[c("SITE", "STN", "METHOD", "YYYY", "MM", "DD", "ROUND", "StartTime", "PKEY")], pcdat, by="PKEY") # merge only where we have all data
 
 head(xy.pkey.pc4[is.na(xy.pkey.pc4$ABUND),])
+
+``` 
+
+**Check for Missing Data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind,lapply(xy.pkey.pc4, function(x) {sum(is.na(x))})))) # check for missing data
 ```
 
 In omitting PKEYs where we're missing some data (either bird data or survey / methodological information), we omit `r length(unique(xy.pkey.pc3$PKEY)) - length(unique(xy.pkey.pc4$PKEY))` PKEYs. 
 
-##### Write the table that includes NAs, for now. 
+##### Trying to understand why some of my PKEYs are missing METHOD
+
 ``` {r}
-write.table(xy.pkey.pc3, file="data/birddata_preprocess1.csv", sep=",", row.names=F, col.names=T)
+missingmethod <- xy.pkey.pc3[is.na(xy.pkey.pc3$METHOD),c("PKEY", "YYYY", "MM", "DD")]
+missingmethod <- missingmethod[!duplicated(missingmethod),]
+missingmethod$HaveBirdDat <- "Yes"
+head(missingmethod)
+
+# Test with first one
+
+"BCCA:08PL21:341190:12:1" %in% xy.pkey$PKEY # this PKEY with a missing method is not in the xy.pkey table
+"BCCA:08PL21:341190:12:1" %in% pcdat$PKEY   # this PKEY with a missing method is in the pcdat table
+
+sum(missingmethod$PKEY %in% xy.pkey$PKEY) # how many PKEYs with missing methods are in the PKEY table?
+sum(missingmethod$PKEY %in% pcdat$PKEY) # how many PKEYs with missing methods are in the PCDAT table?
+
+pcdattab.pkeys <- data.frame(PKEY = unique(pcdat$PKEY), inPCDATtable="yes")  
+nrow(pcdattab.pkeys)
+
+pkeytab.pkeys <- data.frame(PKEY=unique(xy.pkey$PKEY), inPKEYtable="yes")
+nrow(pkeytab.pkeys)
+
+pkeys <- merge(pkeytab.pkeys, pcdattab.pkeys, by="PKEY", all=T)
+pkeys$MissingSomewhere <- pkeys$inPKEYtable != pkeys$inPCDATtable
+pkeys$MissingSomewhere[is.na(pkeys$MissingSomewhere)] <- "Yes"
+pkeys <- pkeys[order(pkeys$Missing),]
+head(pkeys)
+tail(pkeys)
+
+missingsomewhere <- pkeys[pkeys$MissingSomewhere == "Yes",]
+write.table(missingsomewhere, "output/MissingPKEYs.csv", col.names = T, row.names=F, sep=",")
+```
+
+### Add a bit more info to the tables
+
+##### Derive PCODE and SS where missing
+
+``` {r}
+xy.pkey.pc.use <- xy.pkey.pc3
+xy.pkey.pc.use$PCODE_derived <- unlist(lapply(strsplit(as.character(xy.pkey.pc.use$PKEY), ":"), function(x) {x[1]}))
+xy.pkey.pc.use$SS_derived <- unlist(lapply(strsplit(as.character(xy.pkey.pc.use$PKEY), ":"), function(x) {paste(x[1:3], collapse=":")}))
+```
+
+**Check for Missing Data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind,lapply(xy.pkey.pc.use, function(x) {sum(is.na(x))})))) # check for missing data
+```
+
+
+##### Add Methods
+
+**Get METHOD from PKEY Table**
+
+* Noting that there are some PKEYs in the pcdat table that don't have a method
+
+``` {r}
+pkey <- read.csv("data/BC_COFI_PKEY.txt")
+pkey.meth <- pkey[c("PKEY", "METHOD")]
+pkey.meth <- pkey.meth[!duplicated(pkey.meth),]
+``` 
+
+**Get method details (MaxDur, MaxDist, etc) from proj summary table and method code tables** 
+
+1. **National_Proj_Summary_V4_2015.csv**
+
+```{r, load.proj.summary}
+projs <- read.csv("data/National_Proj_Summary_V4_2015.csv", header=T)
+colnames(projs)[which(colnames(projs) == "Method")] <- "METHOD" #change colname
+projs.qs <- projs #quicksave
+projs$Maxdist <- toupper(projs$Maxdist)
+
+kable(head(projs[c("PCODE", "METHOD", "DURMETH", "DISTMETH", "ChangeMethod", "MaxDuration", "Maxdist")]), row.names=F)
+```
+
+**Add method details to pkey table**
+
+``` {r}
+pkey.meth.details <- merge(pkey.meth, projs, by="METHOD", all.x=T)
+colnames(pkey.meth.details)
+pkey.meth.details <- pkey.meth.details[c("PKEY", "METHOD", "DURMETH", "DISTMETH", "MaxDuration", "Maxdist")] 
+kable(head(pkey.meth.details))
+```
+
+**Check for Missing Data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind,lapply(pkey.meth.details, function(x) {sum(is.na(x))})))) # check for missing data
+```
+
+**NOTES**
+
+* Some of the new projects don't have max dist and max duration in their tables
+* I referred back to the Access database to update the project summary table accordingly
+
+``` {r}
+projs <- read.csv("data/qry_ProjMethodSummary-manuallyCorrected.csv", header=T)
+
+colnames(projs)[which(colnames(projs) == "Method")] <- "METHOD" #change colname
+projs.qs <- projs #quicksave
+projs$Maxdist <- toupper(projs$Maxdist)
+
+kable(head(projs[c("PCODE", "METHOD", "DURMETH", "DISTMETH", "MaxDuration", "Maxdist")]), row.names=F)
+```
+
+``` {r}
+rm(pkey.meth.details)
+pkey.meth.details <- merge(pkey.meth, projs, by="METHOD", all.x=T)
+colnames(pkey.meth.details)
+pkey.meth.details <- pkey.meth.details[c("PKEY", "METHOD", "DURMETH", "DISTMETH", "MaxDuration", "Maxdist")] 
+```
+
+**Merge methods back into the xy.pkey.pcdat table**
+
+``` {r}
+xy.pkey.pc.use2 <- merge(xy.pkey.pc.use[-which(colnames(xy.pkey.pc.use) == "METHOD")], pkey.meth.details, by="PKEY", all.x=T)
+colnames(xy.pkey.pc.use2)
+head(xy.pkey.pc.use2)
+```
+
+**Check for Missing Data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind,lapply(xy.pkey.pc.use2, function(x) {sum(is.na(x))})))) # check for missing data
+```
+
+**NOTES**
+
+* Still missing some data but I don't have time to nit-pick right now
+
+##### Write the table for later
+
+``` {r}
+write.table(xy.pkey.pc.use2, file="data/birddata_preprocess1.csv", sep=",", row.names=F, col.names=T)
 ```
 
 
@@ -378,62 +574,45 @@ First thing to check... whether species means differ by survey method.
     
 If there are systematic differences in mean abundance, I can't simiply lump all data together in one analysis because variation caused by methods will cause non-random spatial biases in abundances. 
 
-**FILES**
-
-1. **National_Proj_Summary_V4_2015.csv**
-2. **DD_duration_codes_methodology.csv**
-3. **DD_distance_codes_methodology.csv**
-
-```{r, load.proj.summary}
-projs <- read.csv("data/National_Proj_Summary_V4_2015.csv", header=T)
-colnames(projs)[which(colnames(projs) == "Method")] <- "METHOD" #change colname
-projs.qs <- projs #quicksave
-projs <- projs[projs$PCODE %in% pkey$PCODE,] #projects I care about for now
-projs <- projs[order(projs$PCODE),] #sort by pcode
-projs$Maxdist <- toupper(projs$Maxdist)
-
-kable(projs[c("PCODE", "METHOD", "DURMETH", "DISTMETH", "ChangeMethod", "MaxDuration", "Maxdist")], row.names=F)
-```
-
-Next, use table that merges xy.pkey with point count data (the one where eall data are intact, not missing)
-
 ``` {r merged.xy.pkey.pc, eval=T}
-xy.pkey.pc <- xy.pkey.pc4
+xy.pkey.pc <- xy.pkey.pc.use2
+colnames(xy.pkey.pc)[which(colnames(xy.pkey.pc) == "PCODE_derived")] <- "PCODE"
 ```
 
-Next, merge pkey/point count data with project summary to associate each point count survey with a method. 
+Filter for those that don't have method
 
-``` {r merge.xy.pkey.pc.method, eval=T}
-xy.pkey.pc.meth <- merge(xy.pkey.pc, projs[c("PCODE", "METHOD", "DURMETH", "DISTMETH", "ChangeMethod", "MaxDuration", "Maxdist")], by="METHOD")
+```{r}
+xy.pkey.pc <- xy.pkey.pc[!is.na(xy.pkey.pc$METHOD),]
 ```
+
 
 Create unique ID for combination of duration and distance method
 
 ``` {r}
-xy.pkey.pc.meth$DurDisKey <- paste(xy.pkey.pc.meth$DURMETH, xy.pkey.pc.meth$DISTMETH, sep=".")
+xy.pkey.pc$DurDisKey <- paste(xy.pkey.pc$DURMETH, xy.pkey.pc$DISTMETH, sep=".")
 ```
 
 #### Compare bird counts among different survey types
 
-`r length(unique(xy.pkey.pc.meth$DurDisKey))` different combinations of methods used, across `r length(unique(xy.pkey.pc.meth$PCODE))` different projects.
+`r length(unique(xy.pkey.pc$DurDisKey))` different combinations of methods used, across `r length(unique(xy.pkey.pc$PCODE))` different projects.
 
 Subset to round1 and behaviour = 6 only
 
 ``` {r}
-xy.pkey.pc.meth.round1 <- xy.pkey.pc.meth[xy.pkey.pc.meth$ROUND == 1 & xy.pkey.pc.meth$BEH == 6,]
+xy.pkey.pc.round1 <- xy.pkey.pc[xy.pkey.pc$ROUND == 1 & xy.pkey.pc$BEH == 6,]
 ```
 
 Aggregate to "total bird" count per survey instance
 
 ``` {r aggregate, eval=T}
-pkey.sumabund <- aggregate(xy.pkey.pc.meth.round1$ABUND,  by=list(PKEY=xy.pkey.pc.meth.round1$PKEY), FUN=sum)
+pkey.sumabund <- aggregate(xy.pkey.pc.round1$ABUND,  by=list(PKEY=xy.pkey.pc.round1$PKEY), FUN=sum)
 colnames(pkey.sumabund)[2] <- "sumABUND"
 ```
 
 Merge with original dataset to get details of methods
 
 ``` {r reattribute.method}
-pkey.method <- xy.pkey.pc.meth.round1[c("PKEY", "DISTMETH", "DURMETH", "METHOD", "MaxDuration", "Maxdist", "DurDisKey")]
+pkey.method <- xy.pkey.pc.round1[c("PKEY", "DISTMETH", "DURMETH", "METHOD", "MaxDuration", "Maxdist", "DurDisKey")]
 pkey.method <- pkey.method[!duplicated(pkey.method),]
 
 pkey.sumabund <- merge(pkey.sumabund, pkey.method, by="PKEY")

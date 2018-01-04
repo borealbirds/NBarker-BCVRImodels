@@ -97,7 +97,7 @@ palrank <- palrank(8)[3:8]
 
 
 # Density
-paldens <- colorRampPalette(c("#ffffcb", "#f3e11f", "#4ccc31", "#048707", "#1b558a", "#150d62"))
+paldens <- colorRampPalette(c("#ffffcb", "#f3e11f", "#4ccc31", "#048707", "#1b558a", "#150d62"), bias=2)
 
 # BecZone
 palbec <- c("#ff0000", #BG_PP
