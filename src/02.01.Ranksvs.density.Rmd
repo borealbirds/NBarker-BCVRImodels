@@ -1,7 +1,7 @@
 ---
 title: "Bird Density vs. Ranks & Forest Attributes - SAMPLED STANDS" 
 author: "Nicole Barker"
-date: "Last updated: Jan 3, 2018"
+date: "Last updated: Jan 5, 2018"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -55,6 +55,8 @@ load("cache/bird_vri_dat_ready.RData")
 colnames(bird_vri_dat_ready)
 tota <- bird_vri_dat_ready
 colnames(tota)[which(colnames(tota) == "TOTA")] <- "Offset" #Peter's offsets had "TOTA" as the column name. Mine had "offset". This changes Peter's column to the consistent one. 
+colnames(tota)[which(colnames(tota) == "SS_derived")] <- "SS" # I derived SS from PKEY in a previous file. Here I rename it to SS
+colnames(tota)[which(colnames(tota) == "PCODE_derived")] <- "PCODE" # I derived PCODE from PKEY in a previous file. Here I rename it to PCODE
 ```
 
 ### Filter out some data I want to exclude from ranks vs. bird density analysis
@@ -163,6 +165,7 @@ if(!exists("fit.dens.forid_tot_quasi")) {
 }
 
 library(arm)
+
 cpois <-    coef(fit.dens.forid_tot_pois) #estimate
 e.cpois <- exp(cpois)                     #expected value
 s1 <- se.coef(fit.dens.forid_tot_pois)    #standard error
@@ -189,7 +192,7 @@ dat.predict <- data.frame(ForID=unique(tota$ForID))
 dat.predict$Offset <- 0 
 dat.predict$Pred_fit.dens.forid_tot_pois <- predict(fit.dens.forid_tot_pois, newdata=dat.predict, type="response") 
 kable(dat.predict[1:10,c("ForID", "Pred_fit.dens.forid_tot_pois", "Offset")]) 
-tota <- merge(tota, dat.predict[c("ForID", "Pred_fit.dens.forid_tot_pois")], by="ForID", all.x=T) 
+tota.wresults <- merge(tota, dat.predict[c("ForID", "Pred_fit.dens.forid_tot_pois")], by="ForID", all.x=T) 
 ``` 
  
 Since my GLM was intercept-less and ForID is the single covariate, exp(coef) are the group means. 
@@ -197,21 +200,27 @@ Since my GLM was intercept-less and ForID is the single covariate, exp(coef) are
 ``` {r eval=T} 
 coefs.forid <- data.frame(exp(coef(fit.dens.forid_tot_pois))) 
 coefs.forid$ForID <- unlist(lapply(strsplit(row.names(coefs.forid), "ForID"), function(x) {x[2]})) 
-tota <- merge(tota, coefs.forid, by="ForID") 
+tota.wresults <- merge(tota.wresults, coefs.forid, by="ForID") 
+tota.wresults$EstDensity <- tota.wresults$Pred_fit.dens.forid_tot_pois 
 ```
 
 ##### Double-check that these predictions make sense. 
+
 Expectation: All point counts within the same forest stand type should have the same expected density, if I understand this analysis correctly. 
 
 ``` {r}
-testset <- tota[tota$ForID %in% "SBS_SBPS.SwB_Decid.31_80.2",]
-testset <- testset[order(testset$Pred_fit.dens.forid_tot, decreasing = F),]
-testset$PredxExposure <- testset$Pred_fit.dens.forid_tot * testset$Exposure
-testset$PredByExposure <- testset$Pred_fit.dens.forid_tot / testset$Exposure
+testset <- tota.wresults[tota.wresults$ForID %in% "SBS_SBPS.SwB_Decid.31_80.2",]
+testset <- testset[order(testset$Pred_fit.dens.forid_tot_pois, decreasing = F),]
+testset$PredxExposure <- testset$Pred_fit.dens.forid_tot_pois * testset$Exposure
+testset$PredByExposure <- testset$Pred_fit.dens.forid_tot_pois / testset$Exposure
 kable(testset[1:10,c("ForID", "PKEY", "Pred_fit.dens.forid_tot_pois", "Exposure", "Offset", "PredxExposure", "PredByExposure", "exp.coef.fit.dens.forid_tot_pois..")], row.names=F, digits=3) 
 ```
 
-**NOTES**
+``` {r}
+hist(tota.wresults$Pred_fit.dens.forid_tot_pois)
+summary(tota.wresults$Pred_fit.dens.forid_tot_pois)
+summary(tota.wresults$Count)
+```
 
 * Initially, my predictions were not the same for all polygons within a forest stand type. After talking to Peter, I realized this is because my Offsets in the "newdata" for the predictions were not 0. It's important to set Offset=0, which then forces the predictions (on response scale) to be expected density per unit area (hectare) and under perfect detection. * For the sake of preserving the research I did when trying to trouble-shoot this, let's work through the logic of an offset in a Poisson model... 
 * Let's work through the logic of an offset in a Poisson model...
@@ -232,14 +241,37 @@ kable(testset[1:10,c("ForID", "PKEY", "Pred_fit.dens.forid_tot_pois", "Exposure"
     * We also discussed that the coefs are group means, and therefore I don't even need to use 'predict' for this step. I double-checked that the predict means matched the coefs and they do. Yay. 
 
 
+**EVEN MORE NOTES**
+
+* The predicted densities look a little low compared to the counts. I'm not sure if this is just because of adjusting from counts to density (/ ha). 
+* To be careful, I'll examine the stand type with the highest count: °r tota.wresults[which.max(tota.wresults$Count),]$ForID° and the stand type with the highest predicted density `r tota.wresults[which.max(tota.wresults$Pred_fit.dens.forid_tot_pois),]$ForID"
+
+``` {r}
+tmp <- tota.wresults[tota.wresults$ForID %in% tota.wresults[which.max(tota.wresults$Count),]$ForID,]
+tmp$CalcObsDens <- tmp$Count / tmp$Exposure
+kable(tmp[c("ForID", "Count", "EstDensity", "CalcObsDens", "Exposure", "Offset", "PKEY")], row.names=F)
+mean(tmp$CalcObsDens)
+
+tmp2 <- tota.wresults[tota.wresults$ForID %in% tota.wresults[which.max(tota.wresults$Pred_fit.dens.forid_tot_pois),]$ForID,]
+tmp2$CalcObsDens <- tmp2$Count / tmp2$Exposure
+kable(tmp2[c("ForID", "Count", "EstDensity", "CalcObsDens", "Exposure", "Offset", "PKEY")], row.names=F)
+mean(tmp2$CalcObsDens)
+```
+
+**NOTES**
+
+* After double-checking some of the extreme values, it looks like the estimated densities do make sense. 
+* The predicted density for the forest stand with the highest observed count is NOT the highest predicted density. That's because other examples of that stand had much lower counts in them, bringing down the mean density estimate for that stand type
+* Meanwhile, the stand type with the highest predicted density was only sampled ONCE, and it had a high count. Therefore the predicted density was also high. 
+* In any case, the predicted densities do make sense, even if they seem low at first. 
+
+
 ### Plotting correspondance between ranks and average observed density (in sampled stand types)
 
 ``` {r plot.foriddens.rank.corr, eval=T}
-tota$EstDensity <- tota$Pred_fit.dens.forid_tot_pois 
-
-ggplot(tota, aes(x=as.factor(Rank), y=EstDensity, group=as.factor(Rank), fill=as.factor(Rank))) + geom_boxplot() + xlab("Matrix Stand Rank") + ylab("Bird Density (# pairs/ha)") + myfacettheme2 + guides(fill=FALSE) + scale_fill_manual(values=palrank) 
+ggplot(tota.wresults, aes(x=as.factor(Rank), y=EstDensity, group=as.factor(Rank), fill=as.factor(Rank))) + geom_boxplot() + xlab("Matrix Stand Rank") + ylab("Bird Density (# pairs/ha)") + myfacettheme2 + guides(fill=FALSE) + scale_fill_manual(values=palrank) 
  
-ggplot(tota, aes(x=as.factor(Rank), y=EstDensity, group=as.factor(Rank), col=as.factor(Rank), fill=as.factor(Rank))) + geom_violin() + xlab("Matrix Stand Rank") + ylab("Bird Density (# pairs/ha)") + myfacettheme2 + guides(fill=FALSE) +  guides(col=FALSE) + scale_fill_manual(values=palrank) + scale_colour_manual(values=palrank) 
+ggplot(tota.wresults, aes(x=as.factor(Rank), y=EstDensity, group=as.factor(Rank), col=as.factor(Rank), fill=as.factor(Rank))) + geom_violin() + xlab("Matrix Stand Rank") + ylab("Bird Density (# pairs/ha)") + myfacettheme2 + guides(fill=FALSE) +  guides(col=FALSE) + scale_fill_manual(values=palrank) + scale_colour_manual(values=palrank) 
 ``` 
 
 
@@ -247,17 +279,23 @@ ggplot(tota, aes(x=as.factor(Rank), y=EstDensity, group=as.factor(Rank), col=as.
  
  
  
- 
+ To be continued...
  
  
  
  
  
 # Question 2: How does bird density relate to forest attributes?  
- 
- 
- 
 
+## Plot relationships between Ranks and stand attributes 
+
+### 1. BecZones
+
+#### Get an overall idea of the distribution of bird density among BEC Zones
+
+``` {r, Fig.Density_BEC1, fig.height=5, fig.width=5, dpi=150}
+ggplot(tota.wresults, aes(x=BecZone, y=EstDensity, col=EstDensity)) + geom_jitter(alpha=0.5,  position=position_jitter(height=0.1, width=0.2)) + myfacettheme3 +  ylab("Bird Density (# pairs/ha)") + scale_colour_gradientn(colours = paldens(10))
+```
 
 
 

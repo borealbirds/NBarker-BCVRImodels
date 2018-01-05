@@ -1,7 +1,7 @@
 ---
 title: "Filter for temporal alignment"
 author: "Nicole Barker"
-date: "Last run: Jan 5, 2018"
+date: "Last run: Jan 5, 2018" 
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
