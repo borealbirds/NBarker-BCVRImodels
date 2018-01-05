@@ -28,6 +28,9 @@ output:
 
 ## Approach 2. Quantitatively analyze relationship between density (count with offset) and Rank
 
+**Steps **
+
+* GLM of bird density as a function of Rank
 
 
 # Question 2: How does bird density relate to forest attributes?  
@@ -66,6 +69,7 @@ colnames(tota)[which(colnames(tota) == "PCODE_derived")] <- "PCODE" # I derived 
 ``` {r}
 tota.qs <- tota
 tota <- subset(tota, tota$Rank %in% 1:6)
+tota$Rank <- as.character(tota$Rank)
 ```
 
 **Stands that have been disturbed by insects**
@@ -124,6 +128,7 @@ tota$Height <- factor(tota$Height)
 levels(tota$Height) <- c("<10.5 m", "10.5-19.4 m", "19.5-28.4 m", "> 28.5 m") 
 ``` 
  
+# Question 1: How well do ranks predict observed bird density? 
 
 ## Approach 1. Descriptive plots of density vs. ranks
 
@@ -141,12 +146,12 @@ Forest stand type is a factor with `r length(unique(tota$ForID))` levels
 **Load previously fit GLMs if they exist**
 
 ``` {r fit.glm.forid, eval=T, echo=T}
-if ("fit.dens.forid_tot_pois.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
-  load("cache/fit.dens.forid_tot_pois.RData")                    #on existence of cached model object.
+if ("fit.dens.forid_alldat_pois.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.forid_alldat_pois.RData")                    #on existence of cached model object.
 }
 
-if ("fit.dens.forid_tot_quasi.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
-  load("cache/fit.dens.forid_tot_quasi.RData")                    #on existence of cached model object.
+if ("fit.dens.forid_alldat_quasi.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.forid_alldat_quasi.RData")                    #on existence of cached model object.
 }
 
 ```
@@ -154,25 +159,25 @@ if ("fit.dens.forid_tot_quasi.RData" %in% dir("cache") == TRUE) { #conditional s
 **Run GLMs if they don't exist**
 
 ``` {r, warning=F, message=F}
-if(!exists("fit.dens.forid_tot_pois")) {
-  fit.dens.forid_tot_pois <- glm(Count ~ ForID-1, family=poisson, data=tota, offset=Offset)
-  cache("fit.dens.forid_tot_pois")
+if(!exists("fit.dens.forid_alldat_pois")) {
+  fit.dens.forid_alldat_pois <- glm(Count ~ ForID-1, family=poisson, data=tota, offset=Offset)
+  cache("fit.dens.forid_alldat_pois")
 }
 
-if(!exists("fit.dens.forid_tot_quasi")) {
-  fit.dens.forid_tot_quasi <- glm(Count ~ ForID-1, family=quasipoisson, data=tota, offset=Offset)
-  cache("fit.dens.forid_tot_quasi")
+if(!exists("fit.dens.forid_alldat_quasi")) {
+  fit.dens.forid_alldat_quasi <- glm(Count ~ ForID-1, family=quasipoisson, data=tota, offset=Offset)
+  cache("fit.dens.forid_alldat_quasi")
 }
 
 library(arm)
 
-cpois <-    coef(fit.dens.forid_tot_pois) #estimate
+cpois <-    coef(fit.dens.forid_alldat_pois) #estimate
 e.cpois <- exp(cpois)                     #expected value
-s1 <- se.coef(fit.dens.forid_tot_pois)    #standard error
+s1 <- se.coef(fit.dens.forid_alldat_pois)    #standard error
 
-cquasi <-    coef(fit.dens.forid_tot_quasi)
+cquasi <-    coef(fit.dens.forid_alldat_quasi)
 e.cquasi <- exp(cquasi)
-squasi <- se.coef(fit.dens.forid_tot_quasi)
+squasi <- se.coef(fit.dens.forid_alldat_quasi)
 
 coeftab <- as.data.frame(cbind(cpois, e.cpois, s1, cquasi, e.cquasi, squasi))
 head(coeftab)
@@ -190,18 +195,22 @@ Basically just takes the mean of all samples within a forest stand type and adju
 ``` {r glm.forid.pred, eval=T}
 dat.predict <- data.frame(ForID=unique(tota$ForID)) 
 dat.predict$Offset <- 0 
-dat.predict$Pred_fit.dens.forid_tot_pois <- predict(fit.dens.forid_tot_pois, newdata=dat.predict, type="response") 
-kable(dat.predict[1:10,c("ForID", "Pred_fit.dens.forid_tot_pois", "Offset")]) 
-tota.wresults <- merge(tota, dat.predict[c("ForID", "Pred_fit.dens.forid_tot_pois")], by="ForID", all.x=T) 
+dat.predict$EstDensity <- predict(fit.dens.forid_alldat_pois, newdata=dat.predict, type="response") 
+stand_density_obs <- merge(dat.predict, tota[c("ForID", "Rank", "BecZone", "SpeciesGroup", "Age", "Height")], by="ForID", all.x=T)
+stand_density_obs <- stand_density_obs[!duplicated(stand_density_obs),] # one row per sampled ForID
+
+kable(stand_density_obs[1:10,c("ForID", "EstDensity", "Offset", "Rank")]) 
+tota.wresults <- merge(tota, stand_density_obs[c("ForID", "EstDensity")], by="ForID", all.x=T) 
 ``` 
  
 Since my GLM was intercept-less and ForID is the single covariate, exp(coef) are the group means. 
  
 ``` {r eval=T} 
-coefs.forid <- data.frame(exp(coef(fit.dens.forid_tot_pois))) 
+coefs.forid <- data.frame(exp(coef(fit.dens.forid_alldat_pois))) 
 coefs.forid$ForID <- unlist(lapply(strsplit(row.names(coefs.forid), "ForID"), function(x) {x[2]})) 
 tota.wresults <- merge(tota.wresults, coefs.forid, by="ForID") 
-tota.wresults$EstDensity <- tota.wresults$Pred_fit.dens.forid_tot_pois 
+
+rm(fit.dens.forid_alldat_pois, fit.dens.forid_alldat_quasi)
 ```
 
 ##### Double-check that these predictions make sense. 
@@ -210,16 +219,17 @@ Expectation: All point counts within the same forest stand type should have the 
 
 ``` {r}
 testset <- tota.wresults[tota.wresults$ForID %in% "SBS_SBPS.SwB_Decid.31_80.2",]
-testset <- testset[order(testset$Pred_fit.dens.forid_tot_pois, decreasing = F),]
-testset$PredxExposure <- testset$Pred_fit.dens.forid_tot_pois * testset$Exposure
-testset$PredByExposure <- testset$Pred_fit.dens.forid_tot_pois / testset$Exposure
-kable(testset[1:10,c("ForID", "PKEY", "Pred_fit.dens.forid_tot_pois", "Exposure", "Offset", "PredxExposure", "PredByExposure", "exp.coef.fit.dens.forid_tot_pois..")], row.names=F, digits=3) 
+testset <- testset[order(testset$EstDensity, decreasing = F),]
+testset$PredxExposure <- testset$EstDensity * testset$Exposure
+testset$PredByExposure <- testset$EstDensity / testset$Exposure
+kable(testset[1:10,c("ForID", "PKEY", "EstDensity", "Exposure", "Offset", "PredxExposure", "PredByExposure", "exp.coef.fit.dens.forid_alldat_pois..")], row.names=F, digits=3) 
 ```
 
 ``` {r}
-hist(tota.wresults$Pred_fit.dens.forid_tot_pois)
-summary(tota.wresults$Pred_fit.dens.forid_tot_pois)
+hist(tota.wresults$EstDensity)
+summary(tota.wresults$EstDensity)
 summary(tota.wresults$Count)
+summary(tota.wresults$Count / tota.wresults$Exposure) # observed density, I think. 
 ```
 
 * Initially, my predictions were not the same for all polygons within a forest stand type. After talking to Peter, I realized this is because my Offsets in the "newdata" for the predictions were not 0. It's important to set Offset=0, which then forces the predictions (on response scale) to be expected density per unit area (hectare) and under perfect detection. * For the sake of preserving the research I did when trying to trouble-shoot this, let's work through the logic of an offset in a Poisson model... 
@@ -244,7 +254,7 @@ summary(tota.wresults$Count)
 **EVEN MORE NOTES**
 
 * The predicted densities look a little low compared to the counts. I'm not sure if this is just because of adjusting from counts to density (/ ha). 
-* To be careful, I'll examine the stand type with the highest count: °r tota.wresults[which.max(tota.wresults$Count),]$ForID° and the stand type with the highest predicted density `r tota.wresults[which.max(tota.wresults$Pred_fit.dens.forid_tot_pois),]$ForID"
+* To be careful, I'll examine the stand type with the highest count: °r tota.wresults[which.max(tota.wresults$Count),]$ForID° and the stand type with the highest predicted density `r tota.wresults[which.max(tota.wresults$Pred_fit.dens.forid_alldat_pois),]$ForID"
 
 ``` {r}
 tmp <- tota.wresults[tota.wresults$ForID %in% tota.wresults[which.max(tota.wresults$Count),]$ForID,]
@@ -252,7 +262,7 @@ tmp$CalcObsDens <- tmp$Count / tmp$Exposure
 kable(tmp[c("ForID", "Count", "EstDensity", "CalcObsDens", "Exposure", "Offset", "PKEY")], row.names=F)
 mean(tmp$CalcObsDens)
 
-tmp2 <- tota.wresults[tota.wresults$ForID %in% tota.wresults[which.max(tota.wresults$Pred_fit.dens.forid_tot_pois),]$ForID,]
+tmp2 <- tota.wresults[tota.wresults$ForID %in% tota.wresults[which.max(tota.wresults$EstDensity),]$ForID,]
 tmp2$CalcObsDens <- tmp2$Count / tmp2$Exposure
 kable(tmp2[c("ForID", "Count", "EstDensity", "CalcObsDens", "Exposure", "Offset", "PKEY")], row.names=F)
 mean(tmp2$CalcObsDens)
@@ -269,75 +279,251 @@ mean(tmp2$CalcObsDens)
 ### Plotting correspondance between ranks and average observed density (in sampled stand types)
 
 ``` {r plot.foriddens.rank.corr, eval=T}
-ggplot(tota.wresults, aes(x=as.factor(Rank), y=EstDensity, group=as.factor(Rank), fill=as.factor(Rank))) + geom_boxplot() + xlab("Matrix Stand Rank") + ylab("Bird Density (# pairs/ha)") + myfacettheme2 + guides(fill=FALSE) + scale_fill_manual(values=palrank) 
+ggplot(stand_density_obs, aes(x=as.factor(Rank), y=EstDensity, group=as.factor(Rank), fill=as.factor(Rank))) + geom_boxplot() + xlab("Matrix Stand Rank") + ylab("Bird Density (# pairs/ha)") + myfacettheme2 + guides(fill=FALSE) + scale_fill_manual(values=palrank) 
  
-ggplot(tota.wresults, aes(x=as.factor(Rank), y=EstDensity, group=as.factor(Rank), col=as.factor(Rank), fill=as.factor(Rank))) + geom_violin() + xlab("Matrix Stand Rank") + ylab("Bird Density (# pairs/ha)") + myfacettheme2 + guides(fill=FALSE) +  guides(col=FALSE) + scale_fill_manual(values=palrank) + scale_colour_manual(values=palrank) 
+ggplot(stand_density_obs, aes(x=as.factor(Rank), y=EstDensity, group=as.factor(Rank), fill=as.factor(Rank))) + geom_violin(draw_quantiles = c(0.5), scale="count") + xlab("Matrix Stand Rank") + ylab("Bird Density (# pairs/ha)") + myfacettheme2 + guides(fill=FALSE) +  guides(col=FALSE) + scale_fill_manual(values=palrank)
 ``` 
 
 
 ## Approach 2. Quantitatively analyze relationship between density (count with offset) and Rank 
+
+### Calculating average density per forest stand type and checking for significant differences
+
+**Load previously fit GLMs if they exist**
+
+``` {r fit.glm.rankvsdensity, eval=T, echo=T}
+if ("fit.dens.rankVdensity_alldat_pois_means.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.rankVdensity_alldat_pois_means.RData")                    #on existence of cached model object.
+}
+
+if ("fit.dens.rankVdensity_alldat_quasi_means.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.rankVdensity_alldat_quasi_means.RData")                    #on existence of cached model object.
+}
+
+```
+
+**Run GLMs if they don't exist**
+
+### Means Parameterization to estimate Rank Means. 
+
+``` {r, warning=F, message=F}
+if(!exists("fit.dens.rankVdensity_alldat_pois_means")) {
+  fit.dens.rankVdensity_alldat_pois_means <- glm(Count ~ Rank-1, family=poisson, data=tota, offset=Offset)
+  cache("fit.dens.rankVdensity_alldat_pois_means")
+}
+
+if(!exists("fit.dens.rankVdensity_alldat_quasi_means")) {
+  fit.dens.rankVdensity_alldat_quasi_means <- glm(Count ~ Rank-1, family=quasipoisson, data=tota, offset=Offset)
+  cache("fit.dens.rankVdensity_alldat_quasi_means")
+}
+
+library(arm)
+
+cpois <-    coef(fit.dens.rankVdensity_alldat_pois_means) #estimate
+e.cpois <- exp(cpois)                     #expected value
+s1 <- se.coef(fit.dens.rankVdensity_alldat_pois_means)    #standard error
+
+cquasi <-    coef(fit.dens.rankVdensity_alldat_quasi_means)
+e.cquasi <- exp(cquasi)
+squasi <- se.coef(fit.dens.rankVdensity_alldat_quasi_means)
+
+coeftab <- as.data.frame(cbind(cpois, e.cpois, s1, cquasi, e.cquasi, squasi))
+head(coeftab)
+
+coeftab2 <- exp(cbind(cpois=coef(fit.dens.rankVdensity_alldat_pois_means), confint(fit.dens.rankVdensity_alldat_pois_means),
+          cquasi=coef(fit.dens.rankVdensity_alldat_quasi_means), confint(fit.dens.rankVdensity_alldat_quasi_means)))
+
+summary(fit.dens.rankVdensity_alldat_pois_means)
+summary(fit.dens.rankVdensity_alldat_quasi_means)
+```
  
  
+### Effects Parameterization to evaluate differences between Ranks. 
+
+``` {r, warning=F, message=F}
+if(!exists("fit.dens.rankVdensity_alldat_pois_effects")) {
+  fit.dens.rankVdensity_alldat_pois_effects <- glm(Count ~ Rank, family=poisson, data=tota, offset=Offset)
+  cache("fit.dens.rankVdensity_alldat_pois_effects")
+}
+
+if(!exists("fit.dens.rankVdensity_alldat_quasi_effects")) {
+  fit.dens.rankVdensity_alldat_quasi_effects <- glm(Count ~ Rank, family=quasipoisson, data=tota, offset=Offset)
+  cache("fit.dens.rankVdensity_alldat_quasi_effects")
+}
+
+library(arm)
+
+cpois <-    coef(fit.dens.rankVdensity_alldat_pois_effects) #estimate
+e.cpois <- exp(cpois)                     #expected value
+s1 <- se.coef(fit.dens.rankVdensity_alldat_pois_effects)    #standard error
+
+cquasi <-    coef(fit.dens.rankVdensity_alldat_quasi_effects)
+e.cquasi <- exp(cquasi)
+squasi <- se.coef(fit.dens.rankVdensity_alldat_quasi_effects)
+
+coeftab <- as.data.frame(cbind(cpois, e.cpois, s1, cquasi, e.cquasi, squasi))
+head(coeftab)
+
+coeftab2 <- exp(cbind(cpois=coef(fit.dens.rankVdensity_alldat_pois_effects), confint(fit.dens.rankVdensity_alldat_pois_effects),
+          cquasi=coef(fit.dens.rankVdensity_alldat_quasi_effects), confint(fit.dens.rankVdensity_alldat_quasi_effects)))
+
+summary(fit.dens.rankVdensity_alldat_pois_effects)
+summary(fit.dens.rankVdensity_alldat_quasi_effects)
+
+```
  
- To be continued...
- 
- 
- 
- 
- 
+
 # Question 2: How does bird density relate to forest attributes?  
 
-## Plot relationships between Ranks and stand attributes 
+## Distribution of Bird density across sampled forest stands
 
-### 1. BecZones
+``` {r}
+ggplot(stand_density_obs, aes(x=EstDensity)) + geom_histogram(bins=30) + myfacettheme3 + ylab("Number of Stand Types") + xlab("Bird Density (#pairs/ha)") 
+```
+
+# Plot relationships between bird density and stand attributes 
+
+## 1. BecZones
 
 #### Get an overall idea of the distribution of bird density among BEC Zones
 
 ``` {r, Fig.Density_BEC1, fig.height=5, fig.width=5, dpi=150}
-ggplot(tota.wresults, aes(x=BecZone, y=EstDensity, col=EstDensity)) + geom_jitter(alpha=0.5,  position=position_jitter(height=0.1, width=0.2)) + myfacettheme3 +  ylab("Bird Density (# pairs/ha)") + scale_colour_gradientn(colours = paldens(10))
+ggplot(stand_density_obs, aes(x=BecZone, y=EstDensity, col=EstDensity)) + geom_jitter(alpha=0.5,  position=position_jitter(height=0, width=0.1)) + myfacettheme3 +  ylab("Bird Density (# pairs/ha)") + scale_colour_gradientn(colours = paldens(10)) + xlab("BEC Zone")
+
+ggplot(stand_density_obs, aes(x=BecZone, y=EstDensity, col=BecZone)) + geom_jitter(alpha=0.5,  position=position_jitter(height=0, width=0.1)) + myfacettheme3 +  ylab("Bird Density (# pairs/ha)") + scale_color_manual(values=palbec, guide=FALSE) + xlab("BEC Zone")
+
+ggplot(stand_density_obs, aes(x=BecZone, y=EstDensity, fill=BecZone)) + geom_boxplot() + myfacettheme3 +  ylab("Bird Density (# pairs/ha)") + scale_fill_manual(values=palbec, guide=FALSE) + xlab("BEC Zone")
+
+ggplot(stand_density_obs, aes(x=BecZone, y=EstDensity, fill=BecZone)) + geom_violin(scale="count", draw_quantiles = 0.5) + myfacettheme3 +  ylab("Bird Density (# pairs/ha)") + scale_fill_manual(values=palbec, guide=FALSE) + xlab("BEC Zone")
+
 ```
 
 
 
+####Understand how bird density varies among BEC Zones
+
+``` {r, Fig.Density_Bec2, fig.height=5, fig.width=5, dpi=150}
+ggplot(stand_density_obs, aes(x=EstDensity, fill=BecZone)) + geom_histogram(bins=30, col="black") + ylab("Number of Stand Types") + scale_fill_manual(values=palbec, name = "BEC Zone") + myfacettheme3 + xlab("Bird Density (# pairs/ha)")
+``` 
+
+``` {r, Fig.Density_Bec3, fig.height=10, fig.height=6, dpi=150}
+ggplot(stand_density_obs, aes(x=EstDensity, fill=BecZone)) + geom_histogram(bins=30, col="black") + facet_wrap(~BecZone, ncol=2) + myfacettheme2 + ylab("Number of Stand Types") + scale_fill_manual(values=palbec, guide=FALSE) + xlab("Bird Density (# pairs/ha)")
+```
+
+## 2. SpeciesGroups
+
+*Get an overall idea of the distribution of bird density among Tree Species Groups*
+
+``` {r, Fig.Density_SPGrp1, fig.height=3, fig.width=7, dpi=150}
+ggplot(stand_density_obs, aes(x=SpeciesGroup, y=EstDensity, col=EstDensity)) + geom_jitter(alpha=0.5,  position=position_jitter(height=0, width=0.1)) + myfacettheme4 +  ylab("Bird Density (# pairs/ha)") + scale_colour_gradientn(colours = paldens(10)) + xlab("Dominant Tree Species")
+
+ggplot(stand_density_obs, aes(x=SpeciesGroup, y=EstDensity, col=SpeciesGroup)) + geom_jitter(alpha=0.5,  position=position_jitter(height=0, width=0.1)) + myfacettheme4 +  ylab("Bird Density (# pairs/ha)") + scale_color_manual(values=palsg, guide=FALSE) + xlab("Dominant Tree Species")
+
+ggplot(stand_density_obs, aes(x=SpeciesGroup, y=EstDensity, fill=SpeciesGroup)) + geom_boxplot() + myfacettheme3 +  ylab("Bird Density (# pairs/ha)") + scale_fill_manual(values=palsg, guide=FALSE) + xlab("Dominant Tree Species")
+
+ggplot(stand_density_obs, aes(x=SpeciesGroup, y=EstDensity, fill=SpeciesGroup)) + geom_violin(scale="count", draw_quantiles = 0.5) + myfacettheme3 +  ylab("Bird Density (# pairs/ha)") + scale_fill_manual(values=palsg, guide=FALSE) + xlab("Dominant Tree Species")
+
+```
+
+*Understand how bird density is distributed among Species Groups*
+
+
+``` {r, Fig.Density_SPGrp2, fig.height=9, fig.width=7, dpi=150}
+ggplot(stand_density_obs, aes(x=EstDensity, fill=SpeciesGroup)) + geom_histogram(bins=30, col="black") + ylab("Number of Stand Types") + scale_fill_manual(values=palsg, name = "Species Group") + myfacettheme3 + xlab("Bird Density (# pairs/ha)")
+``` 
+
+``` {r, Fig.Density_SPGrp3, fig.height=11, fig.height=8.5, dpi=150}
+ggplot(stand_density_obs, aes(x=EstDensity, fill=SpeciesGroup)) + geom_histogram(bins=30, col="black") + facet_wrap(~SpeciesGroup, ncol=3) + myfacettheme2 + ylab("Number of Stand Types") + scale_fill_manual(values=palsg, guide=FALSE) + xlab("Bird Density (# pairs/ha)")
+```
+
+
+## 3. Species groups by BEC Zone
+*Get an overall idea of the distribution of birds among Tree Species Groups within the different Bec Zones*
+
+``` {r, Fig.Density_BECSPGrp1, fig.height=8, fig.width=5, dpi=150}
+ggplot(stand_density_obs, aes(x=SpeciesGroup, y=EstDensity, col=SpeciesGroup)) + geom_jitter(alpha=0.5, position=position_jitter(height=0.05, width=0.06)) + myfacettheme4 + facet_wrap(~BecZone, ncol=1) + scale_color_manual(values=palsg, guide=FALSE)+ ylab("Bird Density (# pairs/ha)") + xlab("Dominant Tree Species")
+
+ggplot(stand_density_obs, aes(x=SpeciesGroup, y=EstDensity, col=EstDensity)) + geom_jitter(alpha=0.5, position=position_jitter(height=0.05, width=0.06)) + myfacettheme4 + facet_wrap(~BecZone, ncol=1) + scale_colour_gradientn(colours = paldens(10)) + ylab("Bird Density (# pairs/ha)") + xlab("Dominant Tree Species")
+
+ggplot(stand_density_obs, aes(x=SpeciesGroup, y=EstDensity, col=EstDensity)) + geom_jitter(alpha=0.5, position=position_jitter(height=0.0, width=0.0)) + myfacettheme4 + facet_wrap(~BecZone, ncol=1) + scale_colour_gradientn(colours = paldens(10)) + ylab("Bird Density (# pairs/ha)") + xlab("Dominant Tree Species")
+
+ggplot(stand_density_obs, aes(x=SpeciesGroup, y=EstDensity, fill=SpeciesGroup)) + geom_violin(draw_quantiles=(0.5), scale="count") + myfacettheme4 + facet_wrap(~BecZone, ncol=1) + scale_fill_manual(values=palsg, guide=FALSE)+ ylab("Bird Density (# pairs/ha)") + xlab("Dominant Tree Species")
+
+ggplot(stand_density_obs, aes(x=SpeciesGroup, y=EstDensity, fill=SpeciesGroup)) + geom_boxplot() + myfacettheme4 + facet_wrap(~BecZone, ncol=1) + scale_fill_manual(values=palsg, guide=FALSE)+ ylab("Bird Density (# pairs/ha)") + xlab("Dominant Tree Species")
+```
+
+
+## 4. Age
+
+#### Get an overall idea of the distribution of bird density among age classes
+
+``` {r, Fig.Density_Age1, fig.height=5, fig.width=5, dpi=150}
+ggplot(stand_density_obs, aes(x=Age, y=EstDensity, col=EstDensity)) + geom_jitter(alpha=0.5,  position=position_jitter(height=0, width=0.1)) + myfacettheme3 +  ylab("Bird Density (# pairs/ha)") + scale_colour_gradientn(colours = paldens(10)) + xlab("Stand Age Class")
+
+ggplot(stand_density_obs, aes(x=Age, y=EstDensity, col=Age)) + geom_jitter(alpha=0.5,  position=position_jitter(height=0, width=0.1)) + myfacettheme3 +  ylab("Bird Density (# pairs/ha)") + scale_color_manual(values=palage, guide=FALSE) + xlab("Stand Age Class")
+
+ggplot(stand_density_obs, aes(x=Age, y=EstDensity, fill=Age)) + geom_boxplot() + myfacettheme3 +  ylab("Bird Density (# pairs/ha)") + scale_fill_manual(values=palage, guide=FALSE) + xlab("Stand Age Class")
+
+ggplot(stand_density_obs, aes(x=Age, y=EstDensity, fill=Age)) + geom_violin(scale="count", draw_quantiles = 0.5) + myfacettheme3 +  ylab("Bird Density (# pairs/ha)") + scale_fill_manual(values=palage, guide=FALSE) + xlab("Stand Age Class")
+
+```
+
+####Understand how bird density varies among age classes
+
+``` {r, Fig.Density_Age2, fig.height=5, fig.width=5, dpi=150}
+ggplot(stand_density_obs, aes(x=EstDensity, fill=Age)) + geom_histogram(bins=30, col="black")  + ylab("Number of Stand Types") + scale_fill_manual(values=palage, name = "BEC Zone") + myfacettheme3 + xlab("Bird Density (# pairs/ha)")
+``` 
+
+``` {r, Fig.Density_Age3, fig.height=10, fig.height=6, dpi=150}
+ggplot(stand_density_obs, aes(x=EstDensity, fill=Age)) + geom_histogram(bins=30, col="black") + facet_wrap(~Age, ncol=1) + myfacettheme2 + ylab("Proportion of Stand Types within each Age Class") + scale_fill_manual(values=palage, guide=FALSE) + xlab("Bird Density (# pairs/ha)")
+
+```
 
 
 
+## 5. Height
+
+#### Get an overall idea of the distribution of bird density among Height classes
+
+``` {r, Fig.Density_Height1, fig.height=5, fig.width=5, dpi=150}
+ggplot(stand_density_obs, aes(x=Height, y=EstDensity, col=EstDensity)) + geom_jitter(alpha=0.5,  position=position_jitter(height=0, width=0.1)) + myfacettheme3 +  ylab("Bird Density (# pairs/ha)") + scale_colour_gradientn(colours = paldens(10)) + xlab("Stand Height Class")
+
+ggplot(stand_density_obs, aes(x=Height, y=EstDensity, col=Height)) + geom_jitter(alpha=0.5,  position=position_jitter(height=0, width=0.1)) + myfacettheme3 +  ylab("Bird Density (# pairs/ha)") + scale_color_manual(values=palht, guide=FALSE) + xlab("Stand Height Class")
+
+ggplot(stand_density_obs, aes(x=Height, y=EstDensity, fill=Height)) + geom_boxplot() + myfacettheme3 +  ylab("Bird Density (# pairs/ha)") + scale_fill_manual(values=palht, guide=FALSE) + xlab("Stand Height Class")
+
+ggplot(stand_density_obs, aes(x=Height, y=EstDensity, fill=Height)) + geom_violin(scale="count", draw_quantiles = 0.5) + myfacettheme3 +  ylab("Bird Density (# pairs/ha)") + scale_fill_manual(values=palht, guide=FALSE) + xlab("Stand Height Class")
+```
+
+####Understand how bird density varies among Height classes
+
+``` {r, Fig.Density_Height2, fig.height=5, fig.width=5, dpi=150}
+ggplot(stand_density_obs, aes(x=EstDensity, fill=Height)) + geom_histogram(bins=30, col="black")  + ylab("Number of Stand Types") + scale_fill_manual(values=palht, name = "BEC Zone") + myfacettheme3 + xlab("Bird Density (# pairs/ha)")
+``` 
+
+``` {r, Fig.Density_Height3, fig.height=10, fig.height=6, dpi=150}
+ggplot(stand_density_obs, aes(x=EstDensity, fill=Height)) + geom_histogram(bins=30, col="black") + facet_wrap(~Height, ncol=1) + myfacettheme2 + ylab("Proportion of Stand Types within each Height Class") + scale_fill_manual(values=palht, guide=FALSE) + xlab("Bird Density (# pairs/ha)")
+```
 
 
+## 6. Height by Age
 
+*Get an overall idea of the distribution of birds among height classes for given age classes*
 
+``` {r, Fig.Density_ageht1, fig.height=6, fig.width=4, dpi=150}
+ggplot(stand_density_obs, aes(x=Height, y=EstDensity, col=Age, size=Age)) + geom_jitter(alpha=0.2, position=position_jitter(height=0.2, width=0.2)) + myfacettheme4 + guides(col=guide_legend(ncol=1)) + ylab("Bird Density (# pairs/ha)") + xlab("Height Class") + scale_colour_manual(values=palage)
 
+ggplot(stand_density_obs, aes(x=Height, y=EstDensity, col=Age, shape=Age)) + geom_jitter(alpha=0.8, position=position_jitter(height=0, width=0.2)) + myfacettheme4 + guides(col=guide_legend(ncol=1)) + ylab("Bird Density (# pairs/ha)") + xlab("Height Class") + scale_colour_manual(values=palage)
+```
 
+``` {r, Fig.Density_ageht2, fig.height=5, fig.width=8, dpi=150}
+ggplot(stand_density_obs, aes(x=Height, y=EstDensity, fill=Age)) + geom_boxplot() + myfacettheme4 + guides(col=guide_legend(ncol=1)) + ylab("Bird Density (# pairs/ha)") + xlab("Height Class") + scale_fill_manual(values=palage)
 
+ggplot(stand_density_obs, aes(x=Height, y=EstDensity, fill=Age)) + geom_violin(scale="count", draw_quantiles=0.5) + myfacettheme4 + guides(col=guide_legend(ncol=1)) + ylab("Bird Density (# pairs/ha)") + xlab("Height Class") + scale_fill_manual(values=palage)
 
+ggplot(stand_density_obs, aes(x=Age, y=EstDensity, fill=Height)) + geom_boxplot() + myfacettheme4 + guides(col=guide_legend(ncol=1)) + ylab("Bird Density (# pairs/ha)") + xlab("Age Class") + scale_fill_manual(values=palht)
 
+ggplot(stand_density_obs, aes(x=Age, y=EstDensity, fill=Height)) + geom_violin(scale="count", draw_quantiles=0.5) + myfacettheme4 + guides(col=guide_legend(ncol=1)) + ylab("Bird Density (# pairs/ha)") + xlab("Age Class") + scale_fill_manual(values=palht)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+```
 
