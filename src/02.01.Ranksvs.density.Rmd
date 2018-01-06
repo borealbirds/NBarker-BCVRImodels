@@ -105,7 +105,7 @@ tota.nodup <- tota[!tota$SS %in% dupSS,]
 tota.dupl <- tota[tota$SS %in% dupSS,]
 rm(tota)
 
-kable(tota.dupl[1:25,c("SS", "PKEY", "Difference_Bird_Photo", "Age")])
+kable(digits=3, tota.dupl[1:25,c("SS", "PKEY", "Difference_Bird_Photo", "Age")])
 
 tota.dupl <- tota.dupl[!duplicated(tota.dupl$SS),] # cuts out all subsequently duplicated rows while keeping the first for each SS
 
@@ -168,7 +168,11 @@ if(!exists("fit.dens.forid_alldat_quasi")) {
   fit.dens.forid_alldat_quasi <- glm(Count ~ ForID-1, family=quasipoisson, data=tota, offset=Offset)
   cache("fit.dens.forid_alldat_quasi")
 }
+```
 
+**Summarize GLM results**
+
+``` {r}
 library(arm)
 
 cpois <-    coef(fit.dens.forid_alldat_pois) #estimate
@@ -199,7 +203,7 @@ dat.predict$EstDensity <- predict(fit.dens.forid_alldat_pois, newdata=dat.predic
 stand_density_obs <- merge(dat.predict, tota[c("ForID", "Rank", "BecZone", "SpeciesGroup", "Age", "Height")], by="ForID", all.x=T)
 stand_density_obs <- stand_density_obs[!duplicated(stand_density_obs),] # one row per sampled ForID
 
-kable(stand_density_obs[1:10,c("ForID", "EstDensity", "Offset", "Rank")]) 
+kable(digits=3, stand_density_obs[1:10,c("ForID", "EstDensity", "Offset", "Rank")]) 
 tota.wresults <- merge(tota, stand_density_obs[c("ForID", "EstDensity")], by="ForID", all.x=T) 
 ``` 
  
@@ -222,7 +226,7 @@ testset <- tota.wresults[tota.wresults$ForID %in% "SBS_SBPS.SwB_Decid.31_80.2",]
 testset <- testset[order(testset$EstDensity, decreasing = F),]
 testset$PredxExposure <- testset$EstDensity * testset$Exposure
 testset$PredByExposure <- testset$EstDensity / testset$Exposure
-kable(testset[1:10,c("ForID", "PKEY", "EstDensity", "Exposure", "Offset", "PredxExposure", "PredByExposure", "exp.coef.fit.dens.forid_alldat_pois..")], row.names=F, digits=3) 
+kable(digits=3, testset[1:10,c("ForID", "PKEY", "EstDensity", "Exposure", "Offset", "PredxExposure", "PredByExposure", "exp.coef.fit.dens.forid_alldat_pois..")], row.names=F) 
 ```
 
 ``` {r}
@@ -259,12 +263,12 @@ summary(tota.wresults$Count / tota.wresults$Exposure) # observed density, I thin
 ``` {r}
 tmp <- tota.wresults[tota.wresults$ForID %in% tota.wresults[which.max(tota.wresults$Count),]$ForID,]
 tmp$CalcObsDens <- tmp$Count / tmp$Exposure
-kable(tmp[c("ForID", "Count", "EstDensity", "CalcObsDens", "Exposure", "Offset", "PKEY")], row.names=F)
+kable(digits=3, tmp[c("ForID", "Count", "EstDensity", "CalcObsDens", "Exposure", "Offset", "PKEY")], row.names=F)
 mean(tmp$CalcObsDens)
 
 tmp2 <- tota.wresults[tota.wresults$ForID %in% tota.wresults[which.max(tota.wresults$EstDensity),]$ForID,]
 tmp2$CalcObsDens <- tmp2$Count / tmp2$Exposure
-kable(tmp2[c("ForID", "Count", "EstDensity", "CalcObsDens", "Exposure", "Offset", "PKEY")], row.names=F)
+kable(digits=3, tmp2[c("ForID", "Count", "EstDensity", "CalcObsDens", "Exposure", "Offset", "PKEY")], row.names=F)
 mean(tmp2$CalcObsDens)
 ```
 
@@ -289,9 +293,13 @@ ggplot(stand_density_obs, aes(x=as.factor(Rank), y=EstDensity, group=as.factor(R
 
 ### Calculating average density per forest stand type and checking for significant differences
 
+#### All forest stands together
+
+##### Means Parameterization to estimate Rank Means
+
 **Load previously fit GLMs if they exist**
 
-``` {r fit.glm.rankvsdensity, eval=T, echo=T}
+``` {r , eval=T, echo=T}
 if ("fit.dens.rankVdensity_alldat_pois_means.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
   load("cache/fit.dens.rankVdensity_alldat_pois_means.RData")                    #on existence of cached model object.
 }
@@ -300,11 +308,17 @@ if ("fit.dens.rankVdensity_alldat_quasi_means.RData" %in% dir("cache") == TRUE) 
   load("cache/fit.dens.rankVdensity_alldat_quasi_means.RData")                    #on existence of cached model object.
 }
 
+if ("fit.dens.rankVdensity_alldat_pois_effects.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.rankVdensity_alldat_pois_effects.RData")                    #on existence of cached model object.
+}
+
+if ("fit.dens.rankVdensity_alldat_quasi_effects.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.rankVdensity_alldat_quasi_effects.RData")                    #on existence of cached model object.
+}
+
 ```
 
 **Run GLMs if they don't exist**
-
-### Means Parameterization to estimate Rank Means. 
 
 ``` {r, warning=F, message=F}
 if(!exists("fit.dens.rankVdensity_alldat_pois_means")) {
@@ -316,7 +330,11 @@ if(!exists("fit.dens.rankVdensity_alldat_quasi_means")) {
   fit.dens.rankVdensity_alldat_quasi_means <- glm(Count ~ Rank-1, family=quasipoisson, data=tota, offset=Offset)
   cache("fit.dens.rankVdensity_alldat_quasi_means")
 }
+```
 
+**Summarize GLM results**
+
+``` {r}
 library(arm)
 
 cpois <-    coef(fit.dens.rankVdensity_alldat_pois_means) #estimate
@@ -338,7 +356,7 @@ summary(fit.dens.rankVdensity_alldat_quasi_means)
 ```
  
  
-### Effects Parameterization to evaluate differences between Ranks. 
+##### Effects Parameterization to evaluate differences between Ranks. 
 
 ``` {r, warning=F, message=F}
 if(!exists("fit.dens.rankVdensity_alldat_pois_effects")) {
@@ -350,7 +368,11 @@ if(!exists("fit.dens.rankVdensity_alldat_quasi_effects")) {
   fit.dens.rankVdensity_alldat_quasi_effects <- glm(Count ~ Rank, family=quasipoisson, data=tota, offset=Offset)
   cache("fit.dens.rankVdensity_alldat_quasi_effects")
 }
+```
 
+**Summarize GLM results**
+
+``` {r}
 library(arm)
 
 cpois <-    coef(fit.dens.rankVdensity_alldat_pois_effects) #estimate
@@ -372,6 +394,278 @@ summary(fit.dens.rankVdensity_alldat_quasi_effects)
 
 ```
  
+
+#### Run analysis separately by BEC Zone to account for geographical differences
+
+##### Means Parameterization to estimate Rank Means
+
+**Load previously fit GLMs if they exist**
+
+``` {r , eval=T, echo=T}
+if ("fit.dens.rankVdensity_becdat_pois_means.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.rankVdensity_becdat_pois_means.RData")                    #on existence of cached model object.
+}
+
+if ("fit.dens.rankVdensity_becdat_quasi_means.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.rankVdensity_becdat_quasi_means.RData")                    #on existence of cached model object.
+}
+
+if ("fit.dens.rankVdensity_becdat_pois_effects.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.rankVdensity_becdat_pois_effects.RData")                    #on existence of cached model object.
+}
+
+if ("fit.dens.rankVdensity_becdat_quasi_effects.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.rankVdensity_becdat_quasi_effects.RData")                    #on existence of cached model object.
+}
+
+```
+
+**Run GLMs if they don't exist**
+
+``` {r, warning=F, message=F}
+tota.becsplit <- split(tota, tota$BecZone)
+
+if(!exists("fit.dens.rankVdensity_becdat_pois_means")) {
+  fit.dens.rankVdensity_becdat_pois_means <- lapply(tota.becsplit, function(x) {
+        fitx <- glm(Count ~ Rank-1, family=poisson, data=x, offset=Offset)
+        }) # finish lapply
+  cache("fit.dens.rankVdensity_becdat_pois_means")
+  } #end if statement
+
+if(!exists("fit.dens.rankVdensity_becdat_quasi_means")) {
+  fit.dens.rankVdensity_becdat_quasi_means <- lapply(tota.becsplit, function(x) {
+        fitx <- glm(Count ~ Rank-1, family=quasipoisson, data=x, offset=Offset)
+        }) #finish lapply
+  cache("fit.dens.rankVdensity_becdat_quasi_means")
+  } #end if statement
+
+```
+
+
+**Summarize GLM results**
+
+``` {r}
+sum.dens.rankVdensity_becdat_pois_means <- do.call(rbind, 
+                                                   lapply(1:length(fit.dens.rankVdensity_becdat_pois_means), function(i) {
+  x <- fit.dens.rankVdensity_becdat_pois_means[[i]]
+  sumtab <- data.frame(link = "poisson",
+             parameterization = "means",
+             BecZone = names(fit.dens.rankVdensity_becdat_pois_means)[i],
+             fac.level=names(coef(x)),   #names of the levels of the factor
+             coef=coef(x),           #estimate
+             e.coef = exp(coef(x)), #expected value
+             e.CI=exp(confint(x)),        #standard error
+             p=as.data.frame(summary(x)$coefficients)[[4]])
+  sumtab$sig <- sumtab$p < 0.05
+  sumtab
+  }))
+
+kable(digits=3, sum.dens.rankVdensity_becdat_pois_means, row.names=F, caption="Means Parameterization of Density ~ Rank run separately for each BEC Zone")
+```
+
+ 
+##### Effects Parameterization to evaluate differences between Ranks. 
+
+**Load previously fit GLMs if they exist**
+
+``` {r  eval=T, echo=T}
+if ("fit.dens.rankVdensity_becdat_pois_effects.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.rankVdensity_becdat_pois_effects.RData")                    #on existence of cached model object.
+}
+
+if ("fit.dens.rankVdensity_becdat_quasi_effects.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.rankVdensity_becdat_quasi_effects.RData")                    #on existence of cached model object.
+}
+
+if ("fit.dens.rankVdensity_becdat_pois_effects.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.rankVdensity_becdat_pois_effects.RData")                    #on existence of cached model object.
+}
+
+if ("fit.dens.rankVdensity_becdat_quasi_effects.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.rankVdensity_becdat_quasi_effects.RData")                    #on existence of cached model object.
+}
+
+```
+
+**Run GLMs if they don't exist**
+
+``` {r, warning=F, message=F}
+if(!exists("fit.dens.rankVdensity_becdat_pois_effects")) {
+  fit.dens.rankVdensity_becdat_pois_effects <- lapply(tota.becsplit, function(x) {
+        fitx <- glm(Count ~ Rank, family=poisson, data=x, offset=Offset)
+        }) # finish lapply
+  cache("fit.dens.rankVdensity_becdat_pois_effects")
+}
+
+if(!exists("fit.dens.rankVdensity_becdat_quasi_effects")) {
+  fit.dens.rankVdensity_becdat_quasi_effects <- lapply(tota.becsplit, function(x) {
+        fitx <- glm(Count ~ Rank, family=quasipoisson, data=x, offset=Offset)
+        }) #finish lapply
+  cache("fit.dens.rankVdensity_becdat_quasi_effects")
+}
+
+
+```
+ 
+
+**Summarize GLM results**
+
+``` {r}
+sum.dens.rankVdensity_becdat_pois_effects <- do.call(rbind, 
+                                                   lapply(1:length(fit.dens.rankVdensity_becdat_pois_effects), function(i) {
+  x <- fit.dens.rankVdensity_becdat_pois_effects[[i]]
+  sumtab <- data.frame(link = "poisson",
+             parameterization = "effects",
+             BecZone = names(fit.dens.rankVdensity_becdat_pois_effects)[i],
+             fac.level=names(coef(x)),   #names of the levels of the factor
+             coef=coef(x),           #estimate
+             e.coef = exp(coef(x)), #expected value
+             e.CI=exp(confint(x)),        #standard error
+             p=as.data.frame(summary(x)$coefficients)[[4]])
+  sumtab$sig <- sumtab$p < 0.05
+  sumtab
+  }))
+
+kable(digits=3, sum.dens.rankVdensity_becdat_pois_effects, row.names=F, caption="Effects Parameterization of Density ~ Rank run separately for each BEC Zone")
+```
+
+#### Run analysis separately by dominant tree species to account for tree species differences
+
+##### Means Parameterization to estimate Rank Means
+
+**Load previously fit GLMs if they exist**
+
+``` {r , eval=T, echo=T}
+if ("fit.dens.rankVdensity_spgrpdat_pois_means.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.rankVdensity_spgrpdat_pois_means.RData")                    #on existence of cached model object.
+}
+
+if ("fit.dens.rankVdensity_spgrpdat_quasi_means.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.rankVdensity_spgrpdat_quasi_means.RData")                    #on existence of cached model object.
+}
+
+if ("fit.dens.rankVdensity_spgrpdat_pois_effects.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.rankVdensity_spgrpdat_pois_effects.RData")                    #on existence of cached model object.
+}
+
+if ("fit.dens.rankVdensity_spgrpdat_quasi_effects.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.rankVdensity_spgrpdat_quasi_effects.RData")                    #on existence of cached model object.
+}
+
+```
+
+**Run GLMs if they don't exist**
+
+``` {r, warning=F, message=F}
+tota.spgrpsplit <- split(tota, tota$SpeciesGroup)
+tota.spgrpsplit <- tota.spgrpsplit[-which(names(tota.spgrpsplit) %in% c("Pa"))]
+
+if(!exists("fit.dens.rankVdensity_spgrpdat_pois_means")) {
+  fit.dens.rankVdensity_spgrpdat_pois_means <- lapply(tota.spgrpsplit, function(x) {
+        fitx <- glm(Count ~ Rank-1, family=poisson, data=x, offset=Offset)
+        }) # finish lapply
+  cache("fit.dens.rankVdensity_spgrpdat_pois_means")
+  } #end if statement
+
+if(!exists("fit.dens.rankVdensity_spgrpdat_quasi_means")) {
+  fit.dens.rankVdensity_spgrpdat_quasi_means <- lapply(tota.spgrpsplit, function(x) {
+        fitx <- glm(Count ~ Rank-1, family=quasipoisson, data=x, offset=Offset)
+        }) #finish lapply
+  cache("fit.dens.rankVdensity_spgrpdat_quasi_means")
+  } #end if statement
+
+```
+
+
+**Summarize GLM results**
+
+``` {r}
+sum.dens.rankVdensity_spgrpdat_pois_means <- do.call(rbind, 
+                                                   lapply(1:length(fit.dens.rankVdensity_spgrpdat_pois_means), function(i) {
+  x <- fit.dens.rankVdensity_spgrpdat_pois_means[[i]]
+  sumtab <- data.frame(link = "poisson",
+             parameterization = "means",
+             SpeciesGroup = names(fit.dens.rankVdensity_spgrpdat_pois_means)[i],
+             fac.level=names(coef(x)),   #names of the levels of the factor
+             coef=coef(x),           #estimate
+             e.coef = exp(coef(x)), #expected value
+             e.CI=exp(confint(x)),        #standard error
+             p=as.data.frame(summary(x)$coefficients)[[4]])
+  sumtab$sig <- sumtab$p < 0.05
+  sumtab
+  }))
+
+kable(digits=3, sum.dens.rankVdensity_spgrpdat_pois_means, row.names=F, caption="Means Parameterization of Density ~ Rank run separately for each Species Group")
+```
+
+ 
+##### Effects Parameterization to evaluate differences between Ranks. 
+
+**Load previously fit GLMs if they exist**
+
+``` {r , eval=T, echo=T}
+if ("fit.dens.rankVdensity_spgrpdat_pois_effects.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.rankVdensity_spgrpdat_pois_effects.RData")                    #on existence of cached model object.
+}
+
+if ("fit.dens.rankVdensity_spgrpdat_quasi_effects.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.rankVdensity_spgrpdat_quasi_effects.RData")                    #on existence of cached model object.
+}
+
+if ("fit.dens.rankVdensity_spgrpdat_pois_effects.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.rankVdensity_spgrpdat_pois_effects.RData")                    #on existence of cached model object.
+}
+
+if ("fit.dens.rankVdensity_spgrpdat_quasi_effects.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/fit.dens.rankVdensity_spgrpdat_quasi_effects.RData")                    #on existence of cached model object.
+}
+
+```
+
+**Run GLMs if they don't exist**
+
+``` {r, warning=F, message=F}
+if(!exists("fit.dens.rankVdensity_spgrpdat_pois_effects")) {
+  fit.dens.rankVdensity_spgrpdat_pois_effects <- lapply(tota.spgrpsplit, function(x) {
+        fitx <- glm(Count ~ Rank, family=poisson, data=x, offset=Offset)
+        }) # finish lapply
+  cache("fit.dens.rankVdensity_spgrpdat_pois_effects")
+}
+
+if(!exists("fit.dens.rankVdensity_spgrpdat_quasi_effects")) {
+  fit.dens.rankVdensity_spgrpdat_quasi_effects <- lapply(tota.spgrpsplit, function(x) {
+        fitx <- glm(Count ~ Rank, family=quasipoisson, data=x, offset=Offset)
+        }) #finish lapply
+  cache("fit.dens.rankVdensity_spgrpdat_quasi_effects")
+}
+
+
+```
+ 
+
+**Summarize GLM results**
+
+``` {r}
+sum.dens.rankVdensity_spgrpdat_pois_effects <- do.call(rbind, 
+                                                   lapply(1:length(fit.dens.rankVdensity_spgrpdat_pois_effects), function(i) {
+  x <- fit.dens.rankVdensity_spgrpdat_pois_effects[[i]]
+  sumtab <- data.frame(link = "poisson",
+             parameterization = "effects",
+             SpeciesGroup = names(fit.dens.rankVdensity_spgrpdat_pois_effects)[i],
+             fac.level=names(coef(x)),   #names of the levels of the factor
+             coef=coef(x),           #estimate
+             e.coef = exp(coef(x)), #expected value
+             e.CI=exp(confint(x)),        #standard error
+             p=as.data.frame(summary(x)$coefficients)[[4]])
+  sumtab$sig <- sumtab$p < 0.05
+  sumtab
+  }))
+
+kable(digits=3, sum.dens.rankVdensity_spgrpdat_pois_effects, row.names=F, caption="Effects Parameterization of Density ~ Rank run separately for each Species Group")
+```
+
+
+====================================
 
 # Question 2: How does bird density relate to forest attributes?  
 
