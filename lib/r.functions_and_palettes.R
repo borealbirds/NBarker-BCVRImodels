@@ -149,6 +149,8 @@ palht <- c("#feffb3", #1
 
 #---------------------------------  BRT Functions  ----------------------------------
 
+## RUN BRT --------------------------------------------------------------------------
+
 run.brt.presample <- function(dat, samples, measure, offset, predictors, tc, bf, lr) {
   # Prepare and Run BRT Model
   
@@ -179,5 +181,19 @@ run.brt.presample <- function(dat, samples, measure, offset, predictors, tc, bf,
 
 
 
+
+## PREDUCT BRT --------------------------------------------------------------------------
+
+predict.brt <- function(tmp.brt, pred.dat) {
+  
+  fullpreds <- predict(tmp.brt,
+                       newdata=pred.dat,
+                       n.trees=tmp.brt$gbm.call$best.trees,
+                       type="response")
+  fullpreds <- cbind(gridid=envgrids.sm[1], preds=fullpreds)
+  fullpreds
+  
+  list(fullpreds=fullpreds)
+  }
 
 
