@@ -144,3 +144,40 @@ palht <- c("#feffb3", #1
            "#f7f37a", #2
            "#f8e43b", #3
            "#f9c617") #4      
+
+
+
+#---------------------------------  BRT Functions  ----------------------------------
+
+run.brt.presample <- function(dat, samples, measure, offset, predictors, tc, bf, lr) {
+  # Prepare and Run BRT Model
+  
+  trainss <- samples$train
+  testss <- samples$test
+  trndat <<- subset(dat, dat$SS %in% trainss)
+  tstdat <<- subset(dat, dat$SS %in% testss)
+  col.measure <- which(colnames(dat) == measure)
+  col.predictors <- which(colnames(dat) %in% predictors)
+  
+    
+    
+  # ===== Run BRT ================================================================
+  tmp.brt <- gbm.step(data=trndat,         # dataframe containing data
+                      gbm.x=col.predictors,# predictor variables
+                      gbm.y=col.measure,   # response variable
+                      family="poisson",    # nature of error structure
+                      offset=trndat[[offset]],   # offset
+                      tree.complexity=tc,  # tree complexity
+                      learning.rate=lr,    # learning rate
+                      bag.fraction=bf,     # default is 0.7
+                      silent=F)            # stops counting of trees
+  
+  
+  # ==== Return Results ===========================================================
+  list(trainss = trainss, testss=testss, brt=tmp.brt)
+}
+
+
+
+
+
