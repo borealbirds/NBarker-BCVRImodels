@@ -1,0 +1,73 @@
+---
+title: "Derive matrix from density" 
+author: "Nicole Barker"
+date: "Last run: Jan 9, 2018"
+output: 
+  word_document:
+    reference_docx: ../styles/ReportFormat_1.docx
+---
+
+##Script Abstract
+
+
+
+## Goal: Create a matrix in Kari's format that assigns 'ranks' to stands 
+
+
+
+**Steps **
+
+1. Load data (Canfor + Forsite)
+2. Set training and testing datasets
+3. Run BRT with full possible set of covariates
+4. Simplify BRT to reduce covariates
+5. Generate predictions from BRT
+6. In another script .... explore how to convert density to scores and generate my own rank matrix. 
+
+
+``` {r setup, echo=F, message=F, warning=F}
+require(knitr)
+opts_knit$set(root.dir = '..')
+knitr::opts_chunk$set(
+  fig.path = "figures/"
+)
+```
+
+``` {r load.project, message=F}
+require(ProjectTemplate)
+load.project()
+options(digits=12)
+```
+
+## 1. Load predictions
+
+``` {r}
+preds_forsite <- read.csv("output/predsForsite_2018.01.09.csv", header=T)
+```
+
+## 2. Merge with vri data to obtain forest stand attributes
+
+``` {r}
+load("cache/vri_forsite_postclean.RData")
+preds_forsite_small <- merge(preds_forsite, vri_forsite_postclean[c("FEATURE_ID", "BecZone", "BEC_SUBZONE", "Age", "Height", "SpeciesGroup", "SPECIES_CD_1", "SPECIES_CD_2", "Rank")], by="FEATURE_ID")
+```
+
+## 3. Aggregate into various matrix formats
+
+### Kari's matrix
+
+``` {r}
+aggregate(preds_forsite_small, by=list())
+```
+
+
+``` {r}
+mymat <- 
+
+kable(mymat[1:2,], row.names=F)
+```
+
+preds_melt_bigger <- melt(preds_forsite[c("FEATURE_ID")], id.vars="FEATURE_ID", measure.vars = c("BecZone", "BEC_SUBZONE", "Age", "Height", "SpeciesGroup", "SPECIES_CD_1", "SPECIES_CD_2", "Rank"))
+
+
+```
