@@ -1,7 +1,7 @@
 ---
 title: "Calculate Forest Areas from Shapefile"
 author: "Nicole Barker"
-date: "Dec 22, 2017"
+date: "Jan 8, 2018"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -40,12 +40,15 @@ See 01.01.PreProcess_ForsiteVRI and 01.01a.FixTreeSpeciesCodes for info.
 load("cache/vri_forsite_zSpGroup.RData")
 vri <- vri_forsite_zSpGroup; rm(vri_forsite_zSpGroup)
 colnames(vri)[which(colnames(vri)=="code_use")] <- "SpeciesGroup" #rename standardized species codes to "SpeciesGroup"
+vri$ForID <- with(vri, paste(BecZone, SpeciesGroup, Age, Height, sep=".")) # create ForId; identifier for forest stand type (combinations of 4 attributes)
 
-vri.reduced <- vri[c("BecZone", "SpeciesGroup", "Age", "Height",  "OBJECTID", "FEATURE_ID", "polygon_area_cal")]  # shrink to essential columns 
+length(unique(vri$StandID)) == nrow(vri) #check that unique identifier corresponds to one row
 
-vri.reduced$ForID <- with(vri.reduced, paste(BecZone, SpeciesGroup, Age, Height, sep=".")) # create ForId
+vri.reduced <- vri[c("ForID", "BecZone", "SpeciesGroup", "Age", "Height",  "OBJECTID", "FEATURE_ID", "polygon_area_cal", "StandID")]  # shrink to essential columns 
 
-vri.red <- vri.reduced[vri.reduced$ForID %in% mastermatrix$ForID,] # subset the vri file for  those Forest Stands that are in the mastermatrix. These are those comprised of the subset of each attribute we care about.
+
+#Create another subset
+vri.red <- vri.reduced[vri.reduced$ForID %in% mastermatrix$ForID,] # . those Forest Stands that are in the mastermatrix. These are those comprised of the subset of each attribute we care about.
 ```
 
 #### Initial exploration to understand the format of the shapefile attribute table
@@ -60,17 +63,27 @@ vri.red <- vri.reduced[vri.reduced$ForID %in% mastermatrix$ForID,] # subset the 
 **Conclusion:** both OBJECTID and FEATURE_ID are unique identifiers for rows (polygons) in this file. I want to summarize by forest stand type, over objectid/feature_id.
 
 ``` {r}
-vri.allforid <- merge(mastermatrix, vri.reduced[c("ForID", "OBJECTID", "polygon_area_cal")], by="ForID", all=T)  # ensure all forest stand types have at least one row associated with them, even if there's no forest in that stand type, and even if it's not one of the 3360 forest types we care about. 
+vri.allforid <- merge(mastermatrix, vri.reduced[c("ForID", "StandID", "polygon_area_cal")], by="ForID", all=T)  # ensure all forest stand types have at least one row associated with them, even if there's no forest in that stand type, and even if it's not one of the 3360 forest types we care about. 
 ```
 
 ##### Examine duplicates
 
 ``` {r, echo=T}
-vri.dup <- vri.red[duplicated(vri.red$OBJECTID),]  
-unique(vri.dup$OBJECTID) 
+length(unique(vri.allforid$StandID)) # how many unique identifiers
+nrow(vri.allforid) # how many rows in the original dataset
+
+vri.dup.ID <- vri.allforid[duplicated(vri.allforid$StandID),]$StandID
+vri.dup <- vri.allforid[vri.allforid$StandID %in% vri.dup.ID,] # dataset of the duplicates  
+nrow(vri.dup) #how many duplicates
+head(vri.dup)
+unique(vri.dup$StandID) 
 ```
 
-As of `r format(Sys.Date(), "%B %e, %Y")`, there are `r length(unique(vri.dup$OBJECTID))` duplicated polygon IDs.
+**NOTES**
+
+* all of the apparent duplicates are b/c the VRI shapefile didn't contain an example of that forest stand type (ForID) so their StandID is just 'NA'.
+* If needed in future, I can replace them all with a special "NA" identifier
+
 
 ### 2. Summarize polygon_area by forest stand ID 
 
@@ -179,7 +192,7 @@ Now compare differences between areas calculated by Barb or msyelf - but omit an
 comparea$Diff <- abs(comparea$Barb_noNA - comparea$mine_noNA) # absolute diff between barbs and my areas
 comparea$DiffMoreThan.001 <- comparea$Diff > 0.001
 
-write.table(comparea, "Output/ForestAreaCalcCompare-2017.12.csv", row.names=F, col.names=T, sep=",")
+write.table(comparea, "Output/ForestAreaCalcCompare-2018.01.csv", row.names=F, col.names=T, sep=",")
 
 ```
 
@@ -196,14 +209,14 @@ write.table(comparea, "Output/ForestAreaCalcCompare-2017.12.csv", row.names=F, c
 ### Write files
 
 ``` {r, write.files.from.mycals, echo=T}
-write.table(myforarea[c("ForID", "MyArea")], "data/ForIDAreaCalc-long-2017.12.csv", sep=",", col.names=T, row.names=F)
-write.table(mymat, "data/ForIDAreaCalc-wide-2017.12.csv", row.names=F, col.names=T, sep=",")  
+write.table(myforarea[c("ForID", "MyArea")], "data/ForIDAreaCalc-long-2018.01.csv", sep=",", col.names=T, row.names=F)
+write.table(mymat, "data/ForIDAreaCalc-wide-2018.01.csv", row.names=F, col.names=T, sep=",")  
 ```
 
 ``` {r, write.files.from.barbcalcs, echo=T}
-write.table(barb.mm[c("ForID", "BarbArea")], "data/ForIDAreaCalcBARB-long-2017.12.csv", sep=",", col.names=T, row.names=F)
+write.table(barb.mm[c("ForID", "BarbArea")], "data/ForIDAreaCalcBARB-long-2018.01.csv", sep=",", col.names=T, row.names=F)
 
-write.table(barbmat, "data/ForIDAreaCalcBARB-wide-2017.12.csv", row.names=F, col.names=T, sep=",")  
+write.table(barbmat, "data/ForIDAreaCalcBARB-wide-2018.01.csv", row.names=F, col.names=T, sep=",")  
 
 ```
 

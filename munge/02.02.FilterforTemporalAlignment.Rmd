@@ -1,7 +1,7 @@
 ---
 title: "Filter for temporal alignment"
 author: "Nicole Barker"
-date: "Last run: Jan 5, 2018" 
+date: "Last run: Jan 8, 2018" 
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -207,11 +207,11 @@ vri_bird_dist <- vri_birdsurveys2[!is.na(vri_birdsurveys2$DisturbanceYear),]  #d
 #### For stands with no recorded disturbance, do we believe the age, given the reference year?
 
 ``` {r Fig.ForestAge_NoDisturbance, fig.height=6, fig.width=9, dpi=200}
-ggplot(vri_bird_nodist, aes(x=PROJ_AGE_1, fill=ReferenceYear)) + geom_histogram(bins=40) + myfacettheme3 + ylab("Number of Point Count Surveys") + xlab("Projected Stand Age (stands with no recorded disturbance)") + geom_vline(xintercept=c(0, 30, 80, 120, 250), col="red", linetype="dashed")  + annotate("text", label = "30 yrs", x = 32, y = 3950, size = 3, colour = "red") + 
-  annotate("text", label = "80 yrs", x = 82, y = 3950, size = 3, colour = "red") +
-  annotate("text", label = "120 yrs", x = 120, y = 3950, size = 3, colour = "red") +
-  annotate("text", label = "250 yrs", x = 250, y = 3950, size = 3, colour = "red") +
-  annotate("text", label = "0 yrs", x = 3, y = 3950, size = 3, colour = "red")
+ggplot(vri_bird_nodist, aes(x=PROJ_AGE_1, fill=ReferenceYear)) + geom_histogram(bins=40) + myfacettheme3 + ylab("Number of Point Count Surveys") + xlab("Projected Stand Age (stands with no recorded disturbance)") + geom_vline(xintercept=c(0, 30, 80, 120, 250), col="red", linetype="dashed")  + annotate("text", label = "30 yrs", x = 32, y = 1000, size = 3, colour = "red") + 
+  annotate("text", label = "80 yrs", x = 82, y = 1000, size = 3, colour = "red") +
+  annotate("text", label = "120 yrs", x = 120, y = 1000, size = 3, colour = "red") +
+  annotate("text", label = "250 yrs", x = 250, y = 1000, size = 3, colour = "red") +
+  annotate("text", label = "0 yrs", x = 3, y = 1000, size = 3, colour = "red")
 ```
 
 **NOTES**
@@ -416,19 +416,25 @@ vri_bird_tempaligned <- rbind(vri_bird_nodist[colstokeep],
 #### Quality-check for duplicates
 
 ``` {r}
+nrow(vri_bird_tempaligned)
+length(unique(vri_bird_tempaligned$VRI.layer.polygon.ID))
+length(unique(vri_bird_tempaligned$PKEY))
+
 vri_bird_tempaligned$VRI.layer.polygon.ID.PKEY <- paste(vri_bird_tempaligned$VRI.layer.polygon.ID, vri_bird_tempaligned$PKEY, sep=".")
 
-duplicatedids <- vri_bird_tempaligned$VRI.layer.polygon.ID.PKEY[duplicated(vri_bird_tempaligned$VRI.layer.polygon.ID.PKEY)]
-
-vri_bird_tempaligned[vri_bird_tempaligned$VRI.layer.polygon.ID.PKEY %in% duplicatedids, c("VRI.layer.polygon.ID.PKEY", "PKEY")]
-
+length(unique(vri_bird_tempaligned$VRI.layer.polygon.ID.PKEY))
 ```
 
 #### Add back in offsets
 
 ``` {r}
+colnames(birds)[which(colnames(birds) %in% c("CORRECTION", "OFFSET"))] <- c("Exposure", "Offset")
+
 bird.offsets <- birds[c("PKEY", "Exposure", "Offset")]
-bird.offsets <- bird.offsets[!duplicated(bird.offsets),]
+length(unique(birds$PKEY))
+nrow(bird.offsets)
+
+bird.offsets <- bird.offsets[!duplicated(bird.offsets$PKEY),]
 
 vri_bird_tempaligned <- merge(vri_bird_tempaligned, bird.offsets, by="PKEY", all.x=T)
 ```

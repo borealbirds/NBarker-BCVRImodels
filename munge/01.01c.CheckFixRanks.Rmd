@@ -1,7 +1,7 @@
 ---
 title: "Quality-checking Ranks from Forsite's GIS tool to the Excel Format Matrix"
 author: "Nicole Barker"
-date: "December 20, 2017"
+date: "Jan 8, 2018"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -33,14 +33,15 @@ load.project()
 
 Downloaded from http://webftp.forsite.ca/outgoing/vri_all_fields/ ; Username: mbirds ; Password: Lewis
 
-In previous steps/scripts, I cut out some columns and standardized for species groups. I also quality-checked and recalculated area. 
+In previous steps/scripts, I cut out some columns and standardized for species groups. 
 
 ``` {r cleanvri, echo=T}
 load("cache/vri_forsite_zSpGroup.RData")
-vri <- vri_forsite_zSpGroup; rm(vri_forsite_zSpGroup)
-colnames(vri)[which(colnames(vri) == "code_use")] <- "SpeciesGroup"
-vri$ForID <- with(vri, paste(BecZone, SpeciesGroup, Age, Height, sep="."))
-vri.qs <- vri[c("ForID", "Rank", "BecZone", "SpeciesGroup", "Age", "Height")] #quick save. 
+colnames(vri_forsite_zSpGroup)[which(colnames(vri_forsite_zSpGroup)=="code_use")] <- "SpeciesGroup" #rename standardized species codes to "SpeciesGroup"
+vri_forsite_zSpGroup$ForID <- with(vri_forsite_zSpGroup, paste(BecZone, SpeciesGroup, Age, Height, sep=".")) # create ForId; identifier for forest stand type (combinations of 4 attributes)
+vri <- vri_forsite_zSpGroup
+colnames(vri)
+
 vri <- vri[c("ForID", "Rank")]
 ```
 
@@ -92,7 +93,7 @@ However, a specific instance highlighted that there are sometimes other reasons 
 ##### Remove ForIDs with missing attributes
 
 ``` {r, echo=T}
-vri.0 <- vri.qs[vri.qs$Rank == "0",] #data frame where ranks are 0
+vri.0 <- vri[vri$Rank == "0",] #data frame where ranks are 0
 vri.0 <- vri.0[!duplicated(vri.0$ForID),] #Remove any ForIds that were duplicatednrow(vri.0)
 vri.0 <- vri.0[order(vri.0$ForID),]
 
@@ -141,7 +142,7 @@ vri.0 <- vri.0[!vri.0$BecZone %in% c("BAFA_IMA", "CWH"),]
 
 ``` {r}
 vri.0.qs <- vri.0 #quicksave
-forarea <- read.csv("data/ForIDAreaCalc-long-2017.12.csv", header=T)
+forarea <- read.csv("data/ForIDAreaCalc-long-2018.01.csv", header=T)
 colnames(forarea)[2] <- "ForestArea"
 vri.0 <- merge(vri.0, forarea[c("ForID", "ForestArea")], by="ForID") 
 vri.0 <- vri.0[order(vri.0$ForestArea, decreasing=T),]
@@ -159,6 +160,7 @@ kable(vri.50ha[order(vri.50ha$ForID),], row.names=F)
 ```
 
 **Notes**
+
 I cross-referenced some of these combinations of BecZone and Species Group with the original matrix (Migratory_bird_ranking_matrix_V1.3_Apr15_2016 FINAL-dataformat-zSpGroup.csv) to check whether the missing rank is a Forsite error or a Kari omission
 
 * BG_PP & Decid: Kari didn't score older stands. 
@@ -195,7 +197,8 @@ Even though some of these stands _should_ be ranked, they are not ranked in the 
 vri$Rank[vri$Rank == 0] <- "unranked"
 ```
 
-#### Aggregate by unique ForID
+#### Identify unique Ranks for each ForID (should be 1)
+
 ``` {r check.unique.ranks, echo=T}
 vriranksbyForID <- aggregate(vri$Rank, by=list(ForID=vri$ForID), FUN=function(x) {unique(x)})
 ```
@@ -226,6 +229,7 @@ kmat <- read.csv("data/Migratory_bird_ranking_matrix_V1.3_Apr15_2016 FINAL-dataf
 Ranks are one of: `r unique(kmat$Rank)`
 
 ##### Reassign any stand types assigned a "NA" to "unranked"
+
 ``` {r echo=T}
 kmat$Rank <- as.character(kmat$Rank)
 kmat$Rank[is.na(kmat$Rank)] <- "unranked"
@@ -252,12 +256,16 @@ colnames(vriranksbyForID)[2] <- "VRI.Rank"
 colnames(kmatranksbyForID)[2] <- "KariMatrix.Rank"
 
 tmp <- merge(vriranksbyForID, kmatranksbyForID, by="ForID", all=T)
+length(unique(tmp$ForID))
+nrow(tmp)
 ```
 
 Merge with mastermatrix to keep ONLY those stands I actually care about
 
 ``` {r}
 tmp2 <- merge(tmp, mastermatrix["ForID"], by="ForID", all.y=T)
+length(unique(tmp2$ForID))
+nrow(tmp2)
 ```
 
 * Ranks in the Forsite VRI file are: `r unique(tmp2$VRI.Rank)`
@@ -363,20 +371,32 @@ write.table(ranks, file="data/ForID_Ranks_final_long.csv", sep=",", row.names=F,
 
 ## Add fixed ranks back to VRI file
 
-Load and do some quick fixes (SpeciesGroup column name, creation of ForID)
+### Add 'unranked' to forest stand types that exist in the Vri file but not in mastermatrix
+
+#### Add a StandID to any missing one. 
 
 ``` {r}
-load("cache/vri_forsite_zSpGroup.RData")
-colnames(vri_forsite_zSpGroup)[which(colnames(vri_forsite_zSpGroup)=="code_use")] <- "SpeciesGroup" #rename standardized species codes to "SpeciesGroup"
-vri_forsite_zSpGroup$ForID <- with(vri_forsite_zSpGroup, paste(BecZone, SpeciesGroup, Age, Height, sep="."))
 
-```
-
-Merge corrected ranks with shapefile
-``` {r}
 vri_forsite_zSpGroup_Rankfixed <- merge(vri_forsite_zSpGroup, ranks, by="ForID", all.x=T)
-cache("vri_forsite_zSpGroup_Rankfixed")
-kable(vri_forsite_zSpGroup_Rankfixed[1:2, c(1:4, (ncol(vri_forsite_zSpGroup_Rankfixed) - 4):ncol(vri_forsite_zSpGroup_Rankfixed))], row.names=F)
+colnames(vri_forsite_zSpGroup_Rankfixed)[which(colnames(vri_forsite_zSpGroup_Rankfixed) == "Rank")] <- "UnfixedRank"
+vri_forsite_zSpGroup_Rankfixed[is.na(vri_forsite_zSpGroup_Rankfixed$FinalRank),]$FinalRank <- "Unranked"
+
+length(unique(vri_forsite_zSpGroup_Rankfixed$FEATURE_ID)) # how many unique identifiers
+length(unique(vri_forsite_zSpGroup_Rankfixed$StandID)) # how many unique identifiers
+nrow(vri_forsite_zSpGroup_Rankfixed) # how many rows in the original dataset
+
+vri.dup.ID <- vri_forsite_zSpGroup_Rankfixed[duplicated(vri_forsite_zSpGroup_Rankfixed$StandID),]$StandID
+vri.dup <- vri_forsite_zSpGroup_Rankfixed[vri_forsite_zSpGroup_Rankfixed$StandID %in% vri.dup.ID,] # dataset of the duplicates  
+nrow(vri.dup) #how many duplicates
+unique(vri.dup$StandID) 
 ```
 
+**NOTES**
 
+* No duplicates. 
+
+``` {r}
+colnames(vri_forsite_zSpGroup_Rankfixed)
+cache("vri_forsite_zSpGroup_Rankfixed")
+kable(vri_forsite_zSpGroup_Rankfixed[c(1:2, 3765000:3765010), c(1:4, (ncol(vri_forsite_zSpGroup_Rankfixed) - 4):ncol(vri_forsite_zSpGroup_Rankfixed))], row.names=F)
+```

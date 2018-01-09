@@ -1,7 +1,7 @@
 ---
 title: "BAM Point Count Availability & Representation of Ranking Matrix Forest Stand Types"
 author: "Nicole Barker"
-date: "Last updated: Jan 2, 2018"
+date: "Last updated: Jan 9, 2018"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -59,6 +59,7 @@ options(digits=12)
 
 ``` {r}
 load("cache/bird_vri_dat_ready.RData")
+colnames(bird_vri_dat_ready)[which(colnames(bird_vri_dat_ready) == "SS_derived")] <- "SS"
 pts3.reduced <- bird_vri_dat_ready[c("ForID", "SS", "BecZone", "SpeciesGroup", "Age", "Height", "Rank", "polygon_area_cal", "VRI_Layer")]
 colnames(pts3.reduced)[which(colnames(pts3.reduced) == "polygon_area_cal")] <- "ForestArea"
 ```

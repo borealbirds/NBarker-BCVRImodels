@@ -1,7 +1,7 @@
 ---
 title: "Fix or Calculate Offsets"
 author: "Nicole Barker"
-date: "Last run: Jan 4, 2018"
+date: "Last run: Jan 8, 2018"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -45,308 +45,176 @@ kable(as.data.frame(do.call(rbind,lapply(birddat1, function(x) {sum(is.na(x))}))
 ```
 
 
-
-### Combine with Peter's "total bird" offsets
-
-**First, a quality check**
-
-* How many of my kept PKEYs do not have total bird offsets? 
-* Is it worth Peter recalculating offsets for them?
-
-Ran this code previously to cache the most recent offset file I have
-`offsets <- read.csv("data/offset-species-2016-12-13.csv", header=T)`
-
-`cache("offsets")`
-
-``` {r}
-load("cache/offsets.RData")
-
-colnames(offsets)
-head(offsets$X)
-
-offsetpkeys <-offsets$X
-bcpkeys <- unique(birddat1$PKEY)
-
-load("cache/TOTA_offsets-v3_2016-12-01.Rdata")
-tota <- OFF; rm(OFF)
-tota <- as.data.frame(tota)
-tota$PKEY <- row.names(tota)
-colnames(tota)
-totapkeys <- tota$PKEY
-
-```
-
-##### Which PKEYs from BC are not in Peter's offsets? 
-
-* `sum(bcpkeys %in% offsetpkeys)` `r sum(bcpkeys %in% offsetpkeys)` of `r length(bcpkeys)` BC Pkeys have offsets
-* This suggests that `r length(bcpkeys) - sum(bcpkeys %in% offsetpkeys)` BC PKEYS do __not__ have offsets
-
-
-##### What about the total species offsets? 
-* `sum(bcpkeys %in% totapkeys)` `r sum(bcpkeys %in% totapkeys)` of `r length(bcpkeys)` BC Pkeys have offsets
-* This suggests that `r length(bcpkeys) - sum(bcpkeys %in% totapkeys)` BC PKEYS do __not__ have offsets
-
-##### Which PKEYs don't have offsets? 
-
-``` {r}
-df.offsettest <- data.frame(OFFSET.indivspp="yes", PKEY=offsets$X)
-test <- merge(birddat1, df.offsettest, by="PKEY", all.x=T)
-df.totatest <- data.frame(OFFSET.tota="yes", PKEY=totapkeys)
-test <- merge(test, df.totatest, by="PKEY", all.x=T)
-
-test$BothMissing <- (test$OFFSET.indivspp == "yes") & (test$OFFSET.tota == "yes")
-
-nooffset <- test[is.na(test$BothMissing),]
-write.table(nooffset, "output/BCdat_nooffset_2018.01.04.csv", sep=",", row.names = F, col.names = T)
-
-nooffset$PCODE <- unlist(lapply(strsplit(as.character(nooffset$SS), ":", fixed=T), function(x) {x[1]}))
-
-kable(rbind(head(nooffset), tail(nooffset)),)
-
-length(unique(nooffset$PKEY))
-
-unique(nooffset$PCODE)
-```
-
-##### Examine covariates Trish sent to Peter to understand why we're missing offsets for so many PKEYS
-
-``` {r}
-offcovar <- read.csv("data/covariatesforoffsetMay2017.csv", header=T)
-colnames(offcovar)
-unique(offcovar$PCODE)
-
-offtz <- read.csv("data/covariatesforoffsetMay2017Timezone.csv", header=T)
-colnames(offtz)
-unique(offtz$PCODE)
-
-offcovar.uniquevalues <- as.data.frame(do.call(rbind,lapply(offcovar, function(x) { length(unique(x))})))
-colnames(offcovar.uniquevalues) <- c("Num.Unique.Values")
-kable(offcovar.uniquevalues)
-
-```
-
-**Initial Notes**
-
-* Looks like all PCODEs (projects) missing offsets are in Trish's covariate data
-* This suggests that there was an error in creating the offsets -- somehow these projects were excluded. 
-* I'll check for a couple of individual SSs rather than PCODES
-
-``` {r}
-randomss.nooff <- sample(nooffset$SS, 10)
-offcovar[offcovar$SS %in% randomss.nooff,]
-offtz[offtz$SS %in% randomss.nooff,]
-```
-
-* Only `r sum(offtz$SS %in% randomss.nooff)` of the SS without offsets are in the covariate datafile
-* Somehow some of the SS from the BC data are missing covariates. 
-    * Which ones? 
-    
-    
-##### STEPS  
-
-* Identify which PKEYs are in the new PCODES
-* How many of them have tota offsets from Peter's May update? 
-* How many of them don't have tota offsets from Peter's May update? 
-* How many of them have covariates from the file sent to Peter in May? 
-* How many of them don't have covariates in the file sent to Peter in May? 
-
-**PKEYS in PCODES that have missing offsets**
-
-``` {r}
-new.pcodes <- c(unique(as.character(nooffset$PCODE)), unique(as.character(offcovar$PCODE))) #pcodes with missing offsets
-new.pcodes <- data.frame(PCODE=new.pcodes[!duplicated(new.pcodes)]) #pcodes with missing offsets
-new.pkeys <- merge(new.pcodes, birddat1, by="PCODE", all.x=T) #PKEYS in those PCODES
-nrow(new.pkeys) #how many PKEYS do we need new offsets for
-
-new.ss <- merge(new.pcodes, birddat1[c("METHOD", "SS", "YYYY", "MaxDuration", "Maxdist", "PCODE")], by="PCODE", all.x=T) #PKEYS in those PCODES
-new.ss  <- new.ss[!duplicated(new.ss),]
-nrow(new.ss)
-```
-
-**SS with tota offsets from May update**
-
-* Offsets are generated on a per-PKEY basis
-* But covariates are provided on a per-SS basis, so I need to extract SS from this offset file
-
-``` {r}
-pkey.has.offsets <- data.frame(PKEY=unique(tota$PKEY), hastotaoffset="yes")
-pkey.has.offsets$SS <- unlist(lapply(strsplit(as.character(pkey.has.offsets$PKEY), ":", fixed=T), function(x) {paste(x[1:3], collapse=":")}))
-ss.has.offsets <- pkey.has.offsets[c("SS", "hastotaoffset")]
-ss.has.offsets <- ss.has.offsets[!duplicated(ss.has.offsets),]
-
-new.ss <- merge(new.ss, ss.has.offsets, by="SS", all.x=T)
-
-new.ss$hastotaoffset <- as.character(new.ss$hastotaoffset)
-new.ss$hastotaoffset[is.na(new.ss$hastotaoffset)] <- "no"
-kable(rbind(head(new.ss), tail(new.ss)))
-
-sum(new.ss$hastotaoffset == "yes")
-sum(new.ss$hastotaoffset == "no")
-nrow(new.ss)
-```
-
-**SS in covariate file Trish sent to Peter in May**
-
-``` {r}
-ss.has.offset.covars <- data.frame(SS=unique(offcovar$SS), hascovar="yes")
-ss.has.offset.covars <- ss.has.offset.covars[!duplicated(ss.has.offset.covars),]
-
-new.ss <- merge(new.ss, ss.has.offset.covars, by="SS", all.x=T)
-
-new.ss$hascovar <- as.character(new.ss$hascovar)
-new.ss$hascovar[is.na(new.ss$hascovar)] <- "no"
-kable(rbind(head(new.ss), tail(new.ss)))
-
-sum(new.ss$hascovar == "yes")
-sum(new.ss$hascovar == "no")
-nrow(new.ss)
-```
-
-``` {r}
-ss.has.offset.tzcovars <- data.frame(SS=unique(offtz$SS), hastzcovar="yes")
-ss.has.offset.tzcovars <- ss.has.offset.tzcovars[!duplicated(ss.has.offset.tzcovars),]
-
-new.ss <- merge(new.ss, ss.has.offset.tzcovars, by="SS", all.x=T)
-
-new.ss$hastzcovar <- as.character(new.ss$hastzcovar)
-new.ss$hastzcovar[is.na(new.ss$hastzcovar)] <- "no"
-kable(rbind(head(new.ss), tail(new.ss)))
-
-sum(new.ss$hastzcovar == "yes")
-sum(new.ss$hascovar == "no")
-nrow(new.ss)
-```
-
-**NOTES**
-
-* Makes sense that we would be missing covariates for some of the offsets we're missing 
-* Not sure why we are missing offsets for some we have covariates for
-* How can we possibly have offsets for some we don't have covariates for?
-
-**I suspect a problem in the naming, in switching from SS to PKEY or vice versa**
-
-* But really I don't have time to dig into the details and understand the mistake. How do we fix it? 
-
-
-## Can I create table with all covariates needed to generate offsets? At PKEY level? 
-
-* Covariates needed for offsets: Nalsms, percent tree cover, lat/lon, and 1st day of spring (this latter is optional), tz is also helpful
-
-* Extract point count method details from birddat table - at SS level
-* Extract covariates from Trish's covariate table - also at SS level
-* Combine them
-* Merge with birddat table[SS, PKEY] to get all PKEYS I need offsets for
-* Merge with current tota offsets to demonstrate which PKEYs currently have offsets and which are missing
-
-``` {r}
-covar.ss <- offtz[c("SS", "tree", "NALCMS05", "TZID", "FID_tz_wor", "POINT_X", "POINT_Y")]
-covar.ss <- covar.ss[!duplicated(covar.ss),]
-
-birddat2 <- birddat1[c("SS", "METHOD", "YYYY", "MaxDuration", "Maxdist", "PCODE", "StartTime", "DD", "MM")]
-birddat2 <- birddat2[!duplicated(birddat1),]
-
-new.dat.for.offsets <- merge(birddat2, covar.ss, by="SS", all.x = T)
-
-new.dat.for.offsets <- new.dat.for.offsets[!duplicated(new.dat.for.offsets),]
-
-kable(new.dat.for.offsets[sample(nrow(new.dat.for.offsets), 15),], row.names=F)
-
-```
-
-**Check for Missing Data**
-
-``` {r}
-kable(as.data.frame(do.call(rbind, lapply(new.dat.for.offsets, function(x) {sum(is.na(x))}))), row.names=F)
-
-missingcovar <- new.dat.for.offsets[is.na(new.dat.for.offsets$tree),] #use 'tree' as an example covariate
-
-(pcodes.missingcovar <- unique(missingcovar$PCODE))
-ss.missingcovar <- unique(missingcovar$SS)
-length(ss.missingcovar)
-```
-
-##### Combine with PKEY by SS to make a table of covariates required to calculate offsets by PKEY
-
-``` {r}
-pkey <- read.csv("data/BC_COFI_PKEY.txt")
-colnames(pkey)
-pkey.ss.date.time <- pkey[c("PKEY", "MM", "DD", "StartTime")] 
-pkey.ss.date.time$SS <- unlist(lapply(strsplit(as.character(pkey.ss.date.time$PKEY), ":", fixed=T), function(x) {paste(x[1:3], collapse=":")}))
-pkey.ss.date.time <- pkey.ss.date.time[!duplicated(pkey.ss.date.time),]
-
-new.dat.for.offsets2 <- merge(new.dat.for.offsets, pkey.ss.date.time, by="SS", all.x = T)
-new.dat.for.offsets2 <- merge(new.dat.for.offsets2, pkey.has.offsets[c("PKEY", "hastotaoffset")], by="PKEY", all.x=T)
-
-kable(new.dat.for.offsets2[sample(nrow(new.dat.for.offsets2), 15),], row.names=F)
-```
-
-**Check for missing data**
-
-``` {r}
-
-as.data.frame(do.call(rbind, lapply(new.dat.for.offsets2, function(x) {sum(is.na(x))})))
-
-```
-
-```{r}
-
-write.table(new.dat.for.offsets2, "output/new.dat.for.offsets.csv", col.names=T, row.names=F, sep=",")
-
-```
-
 #### Re-calculate offsets since we're missing a bunch 
 
-Code supplied by Peter Solymos on Jan 2, 2018. 
+Code supplied by Peter Solymos on Jan 7, 2018. 
 
-* Note that this method uses only max distance and max duration, so it only corrects for methodology. Not location- or time-specific covariates. 
+https://github.com/psolymos/bamanalytics/blob/master/projects/bamdb/offsets_TOTA.R
+
+I should do some branching but I don't have time to figure it out right now. 
 
 ``` {r, eval=T}
-require(QPAD)
-x <- birddat1
-str(x)
-table(x$MaxDuration, useNA="a")
-table(x$Maxdist, useNA="a")
-levels(x$Maxdist)[levels(x$Maxdist) == "Unlimited"] <- "Inf"
-x$MaxDistance <- as.numeric(as.character(x$Maxdist)) / 100
-table(x$MaxDistance, useNA="a")
+library(QPAD) # latest estimates
+library(maptools) # for sunrise calculations
+library(mefa4) # data manipulation
 
-# numbers taken from estimates
-phi_tota <- exp(0.2773876)
-tau_tota <- exp(0.8422723)
-x$p <- sra_fun(x$MaxDuration, phi_tota)
-x$A <- ifelse(is.finite(x$MaxDistance), x$MaxDistance^2*pi, tau_tota^2*phi_tota)
-x$q <- ifelse(is.finite(x$MaxDistance), edr_fun(x$MaxDistance, tau_tota), 1)
-summary(x$p)
-summary(x$A)
-summary(x$q)
+dat <- read.csv("data/birddata_preprocess1.csv", header=T)
+dat.qs <- dat
 
-x$Exposure <- with(x, p * A * q)
-x$Offset <- log(x$Exposure)
-summary(x$Offset)
-length(x$Offset)
+## max duration
+dat$MAXDUR <- dat$MaxDuration
+table(dat$MAXDUR, useNA="always")
 
-sum(is.na(x$Offset)) # how many PKEYs don't have offsets
+## max distance
+dat$MAXDIS <- droplevels(dat$Maxdist)
+levels(dat$MAXDIS) <- toupper(levels(dat$MAXDIS))
+levels(dat$MAXDIS)[levels(dat$MAXDIS) == "UNLIMITED"] <- "Inf"
+dat$MAXDIS <- as.numeric(as.character(dat$MAXDIS)) / 100
+table(dat$MAXDIS, useNA="always")
+
+## Date/time components
+chr <- paste0(dat$YYYY, "-", dat$MM, "-", dat$DD, " ", dat$HR, ":", dat$MIN)
+myDATE <- strptime(chr, format="%Y-%m-%e %H:%M")
+dat$DATE <- myDATE
+summary(dat$DATE)
+class(myDATE)
+class(dat$DATE)
+
+dat$JULIAN <- dat$DATE$yday
+dat$JDAY <- myDATE$yday / 365
+summary(dat$JDAY)
+## prevent too far extrapolation
+#dat$JDAY[dat$JDAY < 0.35 | dat$JDAY > 0.55] <- NA
+hist(dat$JDAY)
+
+Coor <- as.matrix(cbind(as.numeric(dat$X_coor), as.numeric(dat$Y_coor)))
+JL <- as.POSIXct(myDATE)
+subset <- rowSums(is.na(Coor))==0 & !is.na(JL)
+sr <- sunriset(Coor[subset,], JL[subset], direction="sunrise", POSIXct.out=FALSE) * 24
+dat$srise <- NA
+dat$srise[subset] <- sr
+dat$start_time <- dat$DATE$hour + dat$DATE$min/60
+
+dat$MDT_offset <- -6
+dat$MDT_offset[dat$TZ == "America/Dawson_Creek"] <- -7
+dat$MDT_offset[dat$TZ == "America/Vancouver"] <- -8
+dat$MDT_offset <- dat$MDT_offset + 6
+table(dat$MDT_offset, useNA="always")
+
+dat$TSSR <- (dat$start_time - dat$srise + dat$MDT_offset) / 24
+dat$TSSR_orig <- dat$TSSR # keep a full copy
+dat$TSSR[dat$start_time > 12] <- NA # after noon
+summary(dat$TSSR)
+summary(dat$start_time)
+hist(dat$TSSR)
+
+dat$TREE <- dat$tree
+summary(dat$TREE)
+dat$TREE[dat$TREE > 100] <- NA
+dat$TREE[dat$TREE < 0] <- NA
+dat$TREE <- dat$TREE / 100
+summary(dat$TREE)
+hist(dat$TREE)
+
+(ltnalc <- read.csv("data/lookup.nalcms.csv", header=T))
+table(dat$NALCMS05, useNA="always")
+dat$NALCMS05[dat$NALCMS05 < 0] <- 0
+compare_sets(dat$NALCMS05, ltnalc$Value)
+dat$LCC2 <- reclass(dat$NALCMS05, ltnalc[,c("Value", "LCC2")], allow_NA=TRUE)
+table(dat$NALCMS05, dat$LCC2, useNA="always")
+dat$LCC4 <- reclass(dat$NALCMS05, ltnalc[,c("Value", "LCC4")], allow_NA=TRUE)
+table(dat$NALCMS05, dat$LCC4, useNA="always")
+boxplot(TREE ~ LCC4, dat)
+
+load_BAM_QPAD(3)
+SPP <- getBAMspecieslist()
+dat$JDAY2 <- dat$JDAY^2
+dat$TSSR2 <- dat$TSSR^2
+
+Xp <- cbind("(Intercept)"=1, as.matrix(dat[,c("TSSR","JDAY","TSSR2","JDAY2")]))
+Xq <- cbind("(Intercept)"=1, TREE=dat$TREE,
+    LCC2OpenWet=ifelse(dat$LCC2=="OpenWet", 1, 0),
+    LCC4Conif=ifelse(dat$LCC4=="Conif", 1, 0),
+    LCC4Open=ifelse(dat$LCC4=="Open", 1, 0),
+    LCC4Wet=ifelse(dat$LCC4=="Wet", 1, 0))
+OFF <- matrix(NA, nrow(dat), length(SPP))
+rownames(OFF) <- dat$PKEY
+colnames(OFF) <- SPP
+
+## load TOTA results
+load("cache/TOTA_BAMCOEFS_QPAD_v3.rda")
+(mods <- getBAMmodellist())
+(sra_mods <- names(mods$sra)[!grepl("DSLS", mods$sra)])
+getBAMspecieslist()
+
+spp <- "TOTA"
+p <- rep(NA, nrow(dat))
+A <- q <- p
+## constant for NA cases
+(cf0 <- exp(unlist(coefBAMspecies(spp, 0, 0))))
+## best model
+(mi <- bestmodelBAMspecies(spp, model.sra=sra_mods, type="BIC"))
+(cfi <- coefBAMspecies(spp, mi$sra, mi$edr))
+
+Xp2 <- Xp[,names(cfi$sra),drop=FALSE]
+OKp <- rowSums(is.na(Xp2)) == 0
+Xq2 <- Xq[,names(cfi$edr),drop=FALSE]
+OKq <- rowSums(is.na(Xq2)) == 0
+
+p[!OKp] <- sra_fun(dat$MAXDUR[!OKp], cf0[1])
+unlim <- ifelse(dat$MAXDIS[!OKq] == Inf, TRUE, FALSE)
+A[!OKq] <- ifelse(unlim, pi * cf0[2]^2, pi * dat$MAXDIS[!OKq]^2)
+q[!OKq] <- ifelse(unlim, 1, edr_fun(dat$MAXDIS[!OKq], cf0[2]))
+
+phi1 <- exp(drop(Xp2[OKp,,drop=FALSE] %*% cfi$sra))
+tau1 <- exp(drop(Xq2[OKq,,drop=FALSE] %*% cfi$edr))
+p[OKp] <- sra_fun(dat$MAXDUR[OKp], phi1)
+unlim <- ifelse(dat$MAXDIS[OKq] == Inf, TRUE, FALSE)
+A[OKq] <- ifelse(unlim, pi * tau1^2, pi * dat$MAXDIS[OKq]^2)
+q[OKq] <- ifelse(unlim, 1, edr_fun(dat$MAXDIS[OKq], tau1))
+
+ii <- which(p == 0)
+p[ii] <- sra_fun(dat$MAXDUR[ii], cf0[1])
+
+dat$CORRECTION <- data.frame(p=p, A=A, q=q)
+summary(dat$CORRECTION)
+dat$OFFSET <- rowSums(log(dat$CORRECTION))
+summary(dat$OFFSET)
+nrow(dat[is.na(dat$OFFSET),]) # methodology is unknown --> drop!
+
+dat.known <- dat[!is.na(dat$OFFSET),]
+    
+offsets <- offsets_2018.01.08 <- dat.known[c("PKEY", "CORRECTION", "OFFSET")]
+
+cache("offsets_2018.01.08")
+
 ```
 
+### Reload bird data
 
-**If applicable, recombine the calculated offsets with Peter's previously calculated offsets**
+``` {r}
+birddat1 <- read.csv("data/birddata_preprocess1.csv", header=T)
+```
 
-As of Jan 3, 2017. I re-calculated all offsets using the simplified approach (above), so this chunk isn't necessary.
+### Merge with offsets by PKEY
 
-``` {r eval=F}
-row.names(x) <- x$PKEY
-colnames(x)[which(colnames(x) == "Offset")] <- "TOTA"
-x <- x[c("TOTA", "PKEY")]
-tota2 <- rbind(tota, x)
-sum(duplicated(tota2$PKEY)) #none are duplicated!
+``` {r}
+birddata_preprocess2_withOffset <- merge(birddat1, offsets, by="PKEY", all.y=T)
 
-birddat5 <- merge(birddat1, tota2, by="PKEY", all.x=T)
-sum(is.na(birddat5$TOTA)) # how many PKEYs don't have offsets
+```
+
+**Quick checks**
+
+``` {r}
+nrow(birddat1)
+length(unique(birddat1$PKEY))
+
+nrow(birddata_preprocess2_withOffset)
+length(unique(birddata_preprocess2_withOffset$PKEY))
 ```
 
 ### Cache pre-processed bird data
 
 ``` {r}
-birddata_preprocess2_withOffset <- x[-which(colnames(x) %in% c("DURMETH", "DISTMETH", "p", "A", "q"))]
 cache("birddata_preprocess2_withOffset")
 ```

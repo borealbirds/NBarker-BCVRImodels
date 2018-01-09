@@ -114,7 +114,7 @@ names(randomsets_tota) <- paste("Model", c(1:boots), "data", sep=".")
 ### Specify predictor variables
 
 ``` {r}
-pred.variables <- c("BEC_ZONE_CODE", "PROJ_AGE_1", "PROJ_HEIGHT_1", "SPECIES_CD_1", "SPECIES_CD_2", "SPECIES_PCT_1", "SPECIES_PCT_2", "BEC_SUBZONE", "CROWN_CLOSURE", "DistYear_Log", "DistYear_Nonlog")
+pred.variables <- c("BEC_ZONE_CODE", "PROJ_AGE_1", "PROJ_HEIGHT_1", "SPECIES_CD_1", "SPECIES_CD_2", "SPECIES_PCT_1", "SPECIES_PCT_2", "BEC_SUBZONE", "CROWN_CLOSURE", "DistYear_Log", "DistYear_Nonlog") # mark points out that i might want to do years since disturbance.
 
 tota$DistYear_Log <- as.numeric(tota$DistYear_Log)
 tota$DistYear_Nonlog <- as.numeric(tota$DistYear_Nonlog)

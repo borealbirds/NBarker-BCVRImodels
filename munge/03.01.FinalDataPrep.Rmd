@@ -1,7 +1,7 @@
 ---
 title: "Final Data Preparation"
 author: "Nicole Barker"
-date: "Last run: Jan 5, 2018" 
+date: "Last run: Jan 9, 2018" 
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -52,6 +52,7 @@ colnames(vri_bird_tempaligned)
 
 load("cache/birddata_preprocess2_withOffset.RData")
 colnames(birddata_preprocess2_withOffset)
+colnames(birddata_preprocess2_withOffset)[which(colnames(birddata_preprocess2_withOffset) %in% c("CORRECTION", "OFFSET"))] <- c("Exposure", "Offset")
 
 birddat <- merge(vri_bird_tempaligned[c("PKEY")], birddata_preprocess2_withOffset[c("PKEY", "YYYY", "ROUND", "SPECIES", "BEH", "METHOD", "MaxDuration", "Maxdist", "Exposure", "Offset", "ABUND")], by="PKEY", all.x=T)
 ```
@@ -80,10 +81,12 @@ birddat3 <- birddat2[c("METHOD", "PKEY", "YYYY", "SPECIES", "BEH", "ABUND", "Max
 
 #### Reclass methods to the subset I would use as factors in subsequent analyses
 
-``` {r}
-distanceClass <- data.frame(Maxdist=unique(birddat3$Maxdist), distanceClass=c("unlimited", "80-100", "80-100", "50"))
+``` {r, eval=T}
+#distanceClass <- data.frame(Maxdist=unique(birddat3$Maxdist), distanceClass=c("unlimited", "80-100", "80-100", "50"))
+distanceClass <- data.frame(Maxdist=unique(birddat3$Maxdist), distanceClass=c("unlimited", "80-100", "50"))
 
-durationClass <- data.frame(MaxDuration=unique(birddat3$MaxDuration), durationClass=c("3", "5-6", "8-10", "8-10", "5-6"))
+#durationClass <- data.frame(MaxDuration=unique(birddat3$MaxDuration), durationClass=c("3", "5-6", "8-10", "8-10", "5-6"))
+durationClass <- data.frame(MaxDuration=unique(birddat3$MaxDuration), durationClass=c("5-6", "8-10", "5-6"))
 
 birddat3.5 <- merge(birddat3, distanceClass, by="Maxdist", all.x=T)
 birddat3.5 <- merge(birddat3.5, durationClass, by="MaxDuration", all.x=T)
@@ -134,12 +137,15 @@ birddat5 <- merge(tmp, birddat4[c("PKEY", "METHOD", "YYYY", "MaxDuration", "Maxd
 birddat5$PCODE_derived <- unlist(lapply(strsplit(as.character(birddat5$PKEY), ":", fixed=T), function(x) {x[1]}))
 birddat5$SS_derived <- unlist(lapply(strsplit(as.character(birddat5$PKEY), ":", fixed=T), function(x) {paste(x[1:3], collapse=":")}))
 
-birddat5 <- birddat5[!duplicated(birddat5),]
+birddat5 <- birddat5[!duplicated(birddat5$PKEY),]
 ```
 
 ### Combine bird data with VRI data
 
 ``` {r}
+nrow(vri_bird_tempaligned)
+length(unique(vri_bird_tempaligned$PKEY))
+
 bird_vri_dat_ready <- merge(birddat5, vri_bird_tempaligned[-which(colnames(vri_bird_tempaligned) %in% c("FID_BIRD", "VRIintersectLayer", "OBJECTID", "FID_VRI", "BirdLayer", "MAP_ID", "POLYGON_ID", "OPENING_IND", "OPENING_SOURCE", "POLYGON_AREA", "INPUT_DATE", "INTERPRETATION_DATE", "REFERENCE_YEAR", "ATTRIBUTION_BASE_DATE", "PROJECTED_DATE", "OPENING_ID", "ORG_UNIT_NO", "ORG_UNIT_CODE", "FD_PERCENT", "PL_PERCENT", "AT_PERCENT", "VRI.layer.polygon.ID",  "ToleratedLag", "LagExceedsTolerated", "VRI.layer.polygon.ID.PKEY", "YYYY", "SS", "Offset", "Exposure"))], by="PKEY", all.x=T)
 bird_vri_dat_ready$ForID <- with(bird_vri_dat_ready, paste(BecZone, SpeciesGroup, Age, Height, sep="."))
 bird_vri_dat_ready <- bird_vri_dat_ready[sort(colnames(bird_vri_dat_ready))]
@@ -149,18 +155,17 @@ kable(bird_vri_dat_ready[sample(nrow(bird_vri_dat_ready), 10), c("ForID", "BecZo
 
 ### Check if offsets are the same within a given survey method
 
-* The following table should have only one value per row if I'm using the simpler method of calculate offsets
-* Each row represents a different method
+* The following list should have only one value per list item if I'm using the simpler method of calculate offsets
+    * It will have multiple values if I"m using the more complex approach
+* Each list item represents a different method
 
 ``` {r}
 methods <- unique(bird_vri_dat_ready$METHOD)
 
 ## function to look at unique offsets within a given method. Should have one value per row/method.
-tmp <- as.data.frame(do.call(rbind, lapply(methods, function(x) {
+lapply(methods, function(x) {
   unique(bird_vri_dat_ready[bird_vri_dat_ready$METHOD == x,]$Offset)
-})))
-
-kable(data.frame(METHOD=methods, Offset=tmp$V1), row.names=F)
+})
 ```
 
 ``` {r}

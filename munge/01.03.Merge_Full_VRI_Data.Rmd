@@ -1,7 +1,7 @@
 ---
 title: "Merge Forsite and Canfor TFL VRI files together"
 author: "Nicole Barker"
-date: "Last run: Dec 29, 2017"
+date: "Last run: Jan 8, 2018"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -52,10 +52,13 @@ options(digits=12)
 ``` {r}
 load("cache/vri_forsite_zSpGroup_Rankfixed.RData")
 vri_forsite <- vri_forsite_zSpGroup_Rankfixed; rm(vri_forsite_zSpGroup_Rankfixed)
+colnames(vri_forsite)[which(colnames(vri_forsite) == "FinalRank")] <- "Rank"
 
 forsite_colnames <- data.frame(ColName=colnames(vri_forsite), In_ForsiteVRI=as.character("Yes"))
 
-load("cache/vri_canfortfl.RData")
+
+load("cache/vri_canfortfl_mostfields.RData")
+vri_canfortfl <- vri_canfortfl_mostfields; rm(vri_canfortfl_mostfields)
 canfor_colnames <- data.frame(ColName=colnames(vri_canfortfl), In_vri_canfortfl=as.character("Yes"))
 ```
 
@@ -102,20 +105,27 @@ kable(all_colnames, row.names=F)
 
 ## Merge two VRI files together
 
-#### Subset for common set of columns
+#### Subset for common set of columns and create a layer + polygon unique identifier that works across spatial files
 ``` {r}
 commoncols <- all_colnames[all_colnames$In_vri_canfortfl == "Yes" & all_colnames$In_ForsiteVRI == "Yes",]$ColName
 
-vri_canfortfl2 <- vri_canfortfl[which(colnames(vri_canfortfl) %in% commoncols)]
-vri_canfortfl2$VRI_Layer <- "Canfor_TFL"
 vri_forsite2 <- vri_forsite[which(colnames(vri_forsite) %in% commoncols)]
-vri_forsite2$VRI_Layer <- "Forsite_VRI"
+vri_forsite2$ID.Layer.Polygon <- paste(vri_forsite2$VRI_Layer, vri_forsite2$FEATURE_ID, sep=".")
+nrow(vri_forsite2)
+length(unique(vri_forsite2$ID.Layer.Polygon))
+
+vri_canfortfl2 <- vri_canfortfl[which(colnames(vri_canfortfl) %in% commoncols)]
+vri_canfortfl2$ID.Layer.Polygon <- paste(vri_canfortfl2$VRI_Layer, vri_canfortfl2$OBJECTID, sep=".")
+nrow(vri_canfortfl2)
+length(unique(vri_canfortfl2$ID.Layer.Polygon))
 ```
 
 #### rbind together
 
 ``` {r}
 vri_both <- rbind(vri_canfortfl2, vri_forsite2)
+nrow(vri_both)
+length(unique(vri_both$ID.Layer.Polygon))
 ```
 
 ## More pre-processing
@@ -153,6 +163,8 @@ sum(refdate_year2$DATE_YEAR_same) # for how many rows was my statement TRUE
 
 * If the REFERENCE_DATE is provided, it is the same year as REFERENCE_YEAR.
 * Therefore, I can simply use REFERENCE_YEAR instead of calculating it. 
+
+#### Extract various years out of datasets
 
 ``` {r, warning=F, message=F}
 vri_both$InputYear <- F.convertdate.extractyear(vri_both$INPUT_DATE)
@@ -204,7 +216,22 @@ head(vri_both[is.na(vri_both$HeightClass_calc), c("PROJ_HEIGHT_1", "HeightClass_
 vri_both[is.na(vri_both$HeightClass_calc),]$HeightClass_calc <- "<10.5 m" #replace non-forested stands with < 10.5 m
 ```
 
+## Quality Checks
+
+``` {r}
+nrow(vri_both)
+length(unique(vri_both$ID.Layer.Polygon))
+colnames(vri_both)
+# these quality checks take too long to run
+
+#kable(as.data.frame(do.call(rbind, lapply(vri_both, function(x) {length(unique(x))}))), caption="Number of unique values in each column") 
+
+#kable(as.data.frame(do.call(rbind, lapply(vri_both, function(x) {sum(is.na(x))}))), caption="Number of rows with NA values in each field")
+```
+
+
 ## Save files
+
 
 ``` {r, eval=T}
 cache("vri_both")
