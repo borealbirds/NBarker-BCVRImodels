@@ -1,7 +1,7 @@
 ---
 title: "Bird Abundance Model (For Prediction)" 
 author: "Nicole Barker"
-date: "Last run: Jan 8, 2018"
+date: "Last run: Jan 9, 2018"
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -46,9 +46,17 @@ load("cache/bird_vri_dat_ready.RData")
 colnames(bird_vri_dat_ready)
 unique(bird_vri_dat_ready$VRI_Layer)
 tota <- bird_vri_dat_ready
-colnames(tota)[which(colnames(tota) == "TOTA")] <- "Offset" #Peter's offsets had "TOTA" as the column name. Mine had "offset". This changes Peter's column to the consistent one. 
+
 colnames(tota)[which(colnames(tota) == "SS_derived")] <- "SS" # I derived SS from PKEY in a previous file. Here I rename it to SS
 colnames(tota)[which(colnames(tota) == "PCODE_derived")] <- "PCODE" # I derived PCODE from PKEY in a previous file. Here I rename it to PCODE
+
+```
+
+### Pick which offset to use
+
+``` {r}
+offset_use <- "offset_simple"
+#offset_use <- "OFFSET"
 ```
 
 ### Filter to include only one survey per sampling location (SS)
@@ -97,6 +105,8 @@ randomsets_tota <- lapply(1:boots, function(i) {
   })
 
 names(randomsets_tota) <- paste("Model", c(1:boots), "data", sep=".")
+
+cache("randomsets_tota")
 ```
 
 
@@ -107,7 +117,7 @@ names(randomsets_tota) <- paste("Model", c(1:boots), "data", sep=".")
 ``` {r}
   tc = 4            # tree complexity 
   bf = 0.5          # bag fraction
-  lr = 0.02
+  lr = 0.007
   kable(data.frame(BRT.Parameters=rbind(tc, bf, lr)))
 ```
 
@@ -122,21 +132,40 @@ tota$DistYear_Nonlog <- as.numeric(tota$DistYear_Nonlog)
 
 ### Load previous results if already run
 
-``` {}
-
+``` {r}
+  if("outboot_tota.RData" %in% dir("../cache") == T) {
+    load("cache/outboot_tota.RData")
+  }
 ```
 
 ### Run model if not previously run
 
 ``` {r}
+if(!exists("outboot_tota")) {
 outboot_tota <- lapply(1:boots, function(i) {
   run.brt.presample(dat=tota,
                     samples=randomsets_tota[[i]],
                     predictors= pred.variables,
                     measure="Count", 
-                    offset="Offset",
+                    offset=offset_use,
                     tc=tc, bf=bf, lr=lr) #end one BRT
 }) #end all BRT boots
+
+cache("outboot_tota")
+}
+```
+  
+### summarize results
+
+``` {r, Fig.BRT_output, fig.height=11, fig.width=8.5, dpi=150}
+lapply(outboot_tota, function(x) {
+  summary(x[["brt"]])
+  })
+
+lapply(outboot_tota, function(x) {
+  gbm.plot(x[["brt"]], n.plots=6, plot.layout=c(3,2))
+  })
+
 ```
   
 ## 4. Simplify BRT to reduce covariates
@@ -156,34 +185,43 @@ outboot_tota <- lapply(1:boots, function(i) {
 
 #### Load full VRI dataset (not just intersected with birds)
 
-``` {r}
+``` {r eval=F}
 load("cache/vri_both.RData")
-pred.dat <- vri_both[which(colnames(vri_both) %in% c("FEATURE_ID", "VRI_Layer", pred.variables))]
-pred.dat$UniquePolygonID <- with(pred.dat, paste(FEATURE_ID, BEC_SUBZONE, SPECIES_CD_1, SPECIES_CD_2, PROJ_AGE_1, PROJ_HEIGHT_1, CROWN_CLOSURE))
-length(unique(pred.dat$UniquePolygonID))
-
-
-
-  lapply(vri_both, function(x) {length(unique(x))})
-
-### Find which column has the most unique values
-tmp <- as.data.frame(do.call(rbind, lapply(vri_both, function(x) {length(unique(x))})))
-row.names(tmp)[which.max(tmp$V1)]
-nrow(vri_both)
-
+pred.dat <- vri_both[which(colnames(vri_both) %in% c("ID.Layer.Polygon", pred.variables))]
+length(unique(pred.dat$ID.Layer.Polygon))
+nrow(pred.dat)
 
 ```
 
 
 
-``` {r }
-    predboot_tota <- lapply(function(1:boots), function(i) {
+``` {r eval=F}
+i=1
+pred_brt_1 <- predict.brt(tmp.brt=outboot_tota[[i]][["brt"]],
+                             pred.dat=pred.dat,
+                          id.col="ID.Layer.Polygon")
+cache("pred_brt_1")
+preds_for_mapping <- pred_brt_1$fullpreds
+preds_for_mapping$Layer <- unlist(lapply(strsplit(preds_for_mapping$ID.Layer.Polygon, ".", fixed=T), function(x) {x[1]}))
+preds_for_mapping$PolygonID <- unlist(lapply(strsplit(preds_for_mapping$ID.Layer.Polygon, ".", fixed=T), function(x) {x[2]}))
+
+preds_for_mapping_canfor <- subset(preds_for_mapping, subset=preds_for_mapping$Layer == "Canfor_TFL")
+preds_for_mapping_forsite <- subset(preds_for_mapping, subset=preds_for_mapping$Layer == "Forsite_VRI")
+
+colnames(preds_for_mapping_canfor)[which(colnames(preds_for_mapping_canfor) == "PolygonID")] <- "OBJECTID"
+colnames(preds_for_mapping_forsite)[which(colnames(preds_for_mapping_forsite) == "PolygonID")] <- "FEATURE_ID"
+
+write.table(preds_for_mapping_canfor[c("OBJECTID", "preds")], file="output/predsCanfor_2018.01.09.csv", sep=",", row.names=F, col.names=T)
+write.table(preds_for_mapping_forsite[c("FEATURE_ID", "preds")], file="output/predsForsite_2018.01.09.csv", sep=",", row.names=F, col.names=T)
+
+    #predboot_tota <- lapply(function(1:boots), function(i) {
         pred <- predict.brt(tmp.brt=outboot_tota[[i]][["brt"]],
                              pred.dat=pred.dat)
         pred        
       }) 
-    names(predboot_MlAbspp_lvl1.1) <- names(outboot_MlAbspp_lvl1.1)
-    rm(outboot_MlAbspp_lvl1.1)
-  boots <- length(predboot_MlAbspp_lvl1.1[[1]])
+    #names(predboot_tota) <- names(outboot_tota)
+    #rm(outboot_tota)
+    #cache(predboot_tota)
+  #boots <- length(predboot_MlAbspp_lvl1.1[[1]])
 ```
 

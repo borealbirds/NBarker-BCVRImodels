@@ -45,8 +45,46 @@ kable(as.data.frame(do.call(rbind,lapply(birddat1, function(x) {sum(is.na(x))}))
 ```
 
 
-#### Re-calculate offsets since we're missing a bunch 
+### Re-calculate offsets since we're missing a bunch 
 
+#### Simpler method without - just corrects for method
+
+Code supplied by Peter Solymos on Jan 2, 2018.  
+ 
+* Note that this method uses only max distance and max duration, so it only corrects for methodology. Not location- or time-specific covariates.  
+ 
+``` {r, eval=T} 
+require(QPAD) 
+x <- birddat1 
+str(x) 
+table(x$MaxDuration, useNA="a") 
+table(x$Maxdist, useNA="a") 
+levels(x$Maxdist)[levels(x$Maxdist) == "Unlimited"] <- "Inf" 
+x$MaxDistance <- as.numeric(as.character(x$Maxdist)) / 100 
+table(x$MaxDistance, useNA="a") 
+ 
+# numbers taken from estimates 
+phi_tota <- exp(0.2773876) 
+tau_tota <- exp(0.8422723) 
+x$p <- sra_fun(x$MaxDuration, phi_tota) 
+x$A <- ifelse(is.finite(x$MaxDistance), x$MaxDistance^2*pi, tau_tota^2*phi_tota) 
+x$q <- ifelse(is.finite(x$MaxDistance), edr_fun(x$MaxDistance, tau_tota), 1) 
+summary(x$p) 
+summary(x$A) 
+summary(x$q) 
+ 
+x$Exposure_simple <- with(x, p * A * q) 
+x$Offset_simple <- log(x$Exposure_simple) 
+summary(x$Offset_simple) 
+length(x$Offset_simple) 
+ 
+offsets_simple <- x[c("PKEY", "Offset_simple", "Exposure_simple")]
+
+sum(is.na(x$Offset_simple)) # how many PKEYs don't have offsets 
+``` 
+
+
+#### With Covariates
 Code supplied by Peter Solymos on Jan 7, 2018. 
 
 https://github.com/psolymos/bamanalytics/blob/master/projects/bamdb/offsets_TOTA.R
@@ -184,37 +222,15 @@ nrow(dat[is.na(dat$OFFSET),]) # methodology is unknown --> drop!
 
 dat.known <- dat[!is.na(dat$OFFSET),]
     
-offsets <- offsets_2018.01.08 <- dat.known[c("PKEY", "CORRECTION", "OFFSET")]
+offsets <- offsets_2018.01.08 <- dat.known[c("PKEY", "OFFSET")]
 
-cache("offsets_2018.01.08")
-
+offsets_complex <- dat[c("PKEY", "OFFSET")]
+offsets_complex <- offsets_complex[!duplicated(offsets_complex$PKEY),]
 ```
 
-### Reload bird data
+### combine offsets
 
 ``` {r}
-birddat1 <- read.csv("data/birddata_preprocess1.csv", header=T)
-```
-
-### Merge with offsets by PKEY
-
-``` {r}
-birddata_preprocess2_withOffset <- merge(birddat1, offsets, by="PKEY", all.y=T)
-
-```
-
-**Quick checks**
-
-``` {r}
-nrow(birddat1)
-length(unique(birddat1$PKEY))
-
-nrow(birddata_preprocess2_withOffset)
-length(unique(birddata_preprocess2_withOffset$PKEY))
-```
-
-### Cache pre-processed bird data
-
-``` {r}
-cache("birddata_preprocess2_withOffset")
+offsets_all <- merge(offsets_simple, offsets_complex, by="PKEY", all=T)
+cache("offsets_all")
 ```

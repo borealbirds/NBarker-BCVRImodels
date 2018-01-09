@@ -50,11 +50,15 @@ load("cache/vri_bird_tempaligned.RData") #(PKEYs quality-checked for use)
 colnames(vri_bird_tempaligned)
 #load("cache/vri_bird_tempaligned-distfiltered.RData") # this doesn't exist yet
 
-load("cache/birddata_preprocess2_withOffset.RData")
-colnames(birddata_preprocess2_withOffset)
-colnames(birddata_preprocess2_withOffset)[which(colnames(birddata_preprocess2_withOffset) %in% c("CORRECTION", "OFFSET"))] <- c("Exposure", "Offset")
+birddat1 <- read.csv("data/birddata_preprocess1.csv", header=T)
+colnames(birddat1)
+colnames(birddat1)[which(colnames(birddat1) == "PCODE_derived")] <- "PCODE"
+colnames(birddat1)[which(colnames(birddat1) == "SS_derived")] <- "SS"
 
-birddat <- merge(vri_bird_tempaligned[c("PKEY")], birddata_preprocess2_withOffset[c("PKEY", "YYYY", "ROUND", "SPECIES", "BEH", "METHOD", "MaxDuration", "Maxdist", "Exposure", "Offset", "ABUND")], by="PKEY", all.x=T)
+load("cache/offsets_all.RData")
+
+birddat <- merge(vri_bird_tempaligned[c("PKEY")], birddat1[c("PKEY", "YYYY", "ROUND", "SPECIES", "BEH", "METHOD", "MaxDuration", "Maxdist", "ABUND")], by="PKEY", all.x=T)
+birddat <- merge(birddat, offsets_all, by="PKEY", all.x=T)
 ```
 
 ### Subset to desired behaviours 
@@ -76,7 +80,7 @@ birddat2 <- birddat[birddat$BEH %in% c("1", "6", "11"),]
 ```
 
 ``` {r}
-birddat3 <- birddat2[c("METHOD", "PKEY", "YYYY", "SPECIES", "BEH", "ABUND", "MaxDuration", "Maxdist", "ROUND", "Offset", "Exposure")]
+birddat3 <- birddat2[c("METHOD", "PKEY", "YYYY", "SPECIES", "BEH", "ABUND", "MaxDuration", "Maxdist", "ROUND", "Offset_simple", "Exposure_simple", "OFFSET")]
 ```
 
 #### Reclass methods to the subset I would use as factors in subsequent analyses
@@ -128,7 +132,7 @@ colnames(speciesCOUNT)[2] <- "speciesCOUNT"
 
 tmp <- merge(sumABUND, speciesCOUNT, by="PKEY")
 
-birddat5 <- merge(tmp, birddat4[c("PKEY", "METHOD", "YYYY", "MaxDuration", "Maxdist", "durationClass", "distanceClass", "Exposure", "Offset")], by="PKEY")
+birddat5 <- merge(tmp, birddat4[c("PKEY", "METHOD", "YYYY", "MaxDuration", "Maxdist", "durationClass", "distanceClass", "Exposure_simple", "Offset_simple", "OFFSET")], by="PKEY")
 ``` 
 
 **Re-derive PCODE and SS from PKEY**
@@ -164,7 +168,11 @@ methods <- unique(bird_vri_dat_ready$METHOD)
 
 ## function to look at unique offsets within a given method. Should have one value per row/method.
 lapply(methods, function(x) {
-  unique(bird_vri_dat_ready[bird_vri_dat_ready$METHOD == x,]$Offset)
+  unique(bird_vri_dat_ready[bird_vri_dat_ready$METHOD == x,]$Offset_simple)
+})
+
+lapply(methods, function(x) {
+  unique(bird_vri_dat_ready[bird_vri_dat_ready$METHOD == x,]$OFFSET)
 })
 ```
 

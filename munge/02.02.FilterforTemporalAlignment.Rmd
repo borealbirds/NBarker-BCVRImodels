@@ -1,7 +1,7 @@
 ---
 title: "Filter for temporal alignment"
 author: "Nicole Barker"
-date: "Last run: Jan 8, 2018" 
+date: "Last run: Jan 9, 2018" 
 output: 
   word_document:
     reference_docx: ../styles/ReportFormat_1.docx
@@ -103,8 +103,11 @@ The resulting projection will be as reliable as the model, so we perhaps have le
 **Merge the intersected VRI polygons with the point count survey information (pkey)**
 
 ``` {r}
-load("cache/birddata_preprocess2_withOffset.RData")
-birds <- birddata_preprocess2_withOffset
+birddat1 <- read.csv("data/birddata_preprocess1.csv", header=T)
+colnames(birddat1)
+colnames(birddat1)[which(colnames(birddat1) == "PCODE_derived")] <- "PCODE"
+colnames(birddat1)[which(colnames(birddat1) == "SS_derived")] <- "SS"
+birds <- birddat1
 colnames(birds)
 birdsurveys <- birds[c("PKEY", "SS", "YYYY")]
 birdsurveys <- birdsurveys[!duplicated(birdsurveys),]
@@ -423,20 +426,6 @@ length(unique(vri_bird_tempaligned$PKEY))
 vri_bird_tempaligned$VRI.layer.polygon.ID.PKEY <- paste(vri_bird_tempaligned$VRI.layer.polygon.ID, vri_bird_tempaligned$PKEY, sep=".")
 
 length(unique(vri_bird_tempaligned$VRI.layer.polygon.ID.PKEY))
-```
-
-#### Add back in offsets
-
-``` {r}
-colnames(birds)[which(colnames(birds) %in% c("CORRECTION", "OFFSET"))] <- c("Exposure", "Offset")
-
-bird.offsets <- birds[c("PKEY", "Exposure", "Offset")]
-length(unique(birds$PKEY))
-nrow(bird.offsets)
-
-bird.offsets <- bird.offsets[!duplicated(bird.offsets$PKEY),]
-
-vri_bird_tempaligned <- merge(vri_bird_tempaligned, bird.offsets, by="PKEY", all.x=T)
 ```
 
 #### Save dataset for future use

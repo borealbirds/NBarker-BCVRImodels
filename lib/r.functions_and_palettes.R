@@ -184,13 +184,13 @@ run.brt.presample <- function(dat, samples, measure, offset, predictors, tc, bf,
 
 ## PREDUCT BRT --------------------------------------------------------------------------
 
-predict.brt <- function(tmp.brt, pred.dat) {
+predict.brt <- function(tmp.brt, pred.dat, id.col) {
   
   fullpreds <- predict(tmp.brt,
                        newdata=pred.dat,
                        n.trees=tmp.brt$gbm.call$best.trees,
                        type="response")
-  fullpreds <- cbind(gridid=envgrids.sm[1], preds=fullpreds)
+  fullpreds <- cbind(stand=pred.dat[id.col], preds=fullpreds)
   fullpreds
   
   list(fullpreds=fullpreds)
