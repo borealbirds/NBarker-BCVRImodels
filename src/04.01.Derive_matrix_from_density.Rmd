@@ -49,7 +49,32 @@ preds_forsite <- read.csv("output/predsForsite_2018.01.09.csv", header=T)
 
 ``` {r}
 load("cache/vri_forsite_postclean.RData")
-preds_forsite_small <- merge(preds_forsite, vri_forsite_postclean[c("FEATURE_ID", "BecZone", "BEC_SUBZONE", "Age", "Height", "SpeciesGroup", "SPECIES_CD_1", "SPECIES_CD_2", "Rank")], by="FEATURE_ID")
+
+```
+
+#### Clean up
+
+##### Keep only Becs, SpGroups, Age, and Height in the mastermatrix
+
+``` {r}
+vri_forsite_postclean$ForID <- with(vri_forsite_postclean, paste(BecZone, SpeciesGroup, Age, Height, sep="."))
+vri_forsite_Inmastermatrix <- subset(vri_forsite_postclean, vri_forsite_postclean$ForID %in% mastermatrix$ForID)
+```
+
+#### Identify desired columns
+
+``` {r}
+cols_to_keep_prediction_matrix <- c("FEATURE_ID", "BecZone", "BEC_SUBZONE", 
+                                    "Age", "Height", "SpeciesGroup", 
+                                    "SPECIES_CD_1", "SPECIES_CD_2", "Rank") 
+
+cols_to_keep_kari_matrix <- c("BecZone", "Age", "Height", "SpeciesGroup", "preds") 
+```
+
+#### Create dataset with VRI attributes and predictions
+
+``` {r}
+preds_forsite_small <- merge(preds_forsite, vri_forsite_Inmastermatrix[cols_to_keep_prediction_matrix], by="FEATURE_ID")
 ```
 
 ## 3. Aggregate into various matrix formats
@@ -57,17 +82,41 @@ preds_forsite_small <- merge(preds_forsite, vri_forsite_postclean[c("FEATURE_ID"
 ### Kari's matrix
 
 ``` {r}
-aggregate(preds_forsite_small, by=list())
+preds_forsite_kariMatrix <- preds_forsite_small[cols_to_keep_kari_matrix]
+
+colnames(preds_forsite_kariMatrix)[which(colnames(preds_forsite_kariMatrix) == "preds")] <- "value"
+
+kable(preds_forsite_kariMatrix[1:15,], row.names=F)
+
+lapply(preds_forsite_kariMatrix[1:4], function(x) {unique(x)})
 ```
 
+#### Cast out 
 
 ``` {r}
-mymat <- 
+pred_matrix_Kariformat <- cast(preds_forsite_kariMatrix, BecZone + SpeciesGroup ~ Age + Height , fun.aggregate = mean) 
 
-kable(mymat[1:2,], row.names=F)
+pred_matrix_Kariformat <- pred_matrix_Kariformat[c("BecZone", "SpeciesGroup", 
+                                                   "3_30_1", "3_30_2", "3_30_3", "3_30_4+", 
+                                                   "31_80_1", "31_80_2", "31_80_3", "31_80_4+", 
+                                                   "81_120_1", "81_120_2", "81_120_3", "81_120_4+",
+                                                   "121_250_1", "121_250_2", "121_250_3", "121_250_4+",
+                                                   "250_1", "250_2", "250_3", "250_4+")]
+
+write.table(pred_matrix_Kariformat, file="output/Matrix_Density_KariFormat.csv", sep=",", row.names=F, col.names=T)
+
 ```
 
-preds_melt_bigger <- melt(preds_forsite[c("FEATURE_ID")], id.vars="FEATURE_ID", measure.vars = c("BecZone", "BEC_SUBZONE", "Age", "Height", "SpeciesGroup", "SPECIES_CD_1", "SPECIES_CD_2", "Rank"))
+#### Scale to 6
 
+``` {r}
+
+tmp <- pred_matrix_Kariformat[3:ncol(pred_matrix_Kariformat)]
+
+pred_matrix_Kariformat_scaled <- cbind(pred_matrix_Kariformat[1:2], 6*(tmp / max(tmp, na.rm=T)))
+
+summary(pred_matrix_Kariformat_scaled)
+
+write.table(pred_matrix_Kariformat_scaled, file="output/Matrix_Density_KariFormat_scaled.csv", sep=",", row.names=F, col.names=T)
 
 ```
