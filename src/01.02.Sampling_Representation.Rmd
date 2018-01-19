@@ -1,0 +1,306 @@
+---
+title: "BAM Point Count Availability & Representation of Ranking Matrix Forest Stand Types"
+author: "Nicole Barker"
+date: "Last updated: Jan 9, 2018"
+output: 
+  word_document:
+    reference_docx: ../styles/ReportFormat_1.docx
+---
+
+##Script Abstract
+Summarize how well the various forest stand types are represented by bird point count surveys collected within reasonable timeframe to the conditions likely presented in the VRI shapefile. 
+
+
+# Question: How well are the different forest stand types represented by point count data currently available in the BAM Database?
+
+## Background
+
+I produced a version of this summary in May 2017 to help guide further point count sampling. It summarized all BC sampling locations within the updated BAM dataset. 
+
+Since then, I screened the dataset, excluding surveys that likely didn't reflect VRI conditions and any surveys that were too close to stand boundaries. These steps are summarized in different documents. 
+
+Here I resummarize the sampling representation, looking only at surveys that I'll actually be using in subsequent analyses. 
+
+**Note that this only summarizes data provided by Forsite in the "migratory bird" VRI shapefile. Many other forest stands were sampled in areas not represented in the provincial VRI, such as in Canfor's TFL. However, the Canfor VRI file doesn't have the derived attributes (BecZone, SpeciesGroup, Age, Height) so I can't summarize sampling within those areas to the same standard.
+
+``` {r setup, echo=F, message=F, warning=F}
+require(knitr)
+opts_knit$set(root.dir = '..')
+knitr::opts_chunk$set(
+  fig.path = "figures/"
+)
+```
+
+``` {r load.project, message=F}
+require(ProjectTemplate)
+load.project()
+options(digits=12)
+```
+
+## 1. Calculate sampling per forest stand type based on the intersection Trish performed. 
+``` {r previous files, echo=F}
+#pts <- read.csv("data/Intersections/IdentPts_LayerDiss.csv")
+#pts2 <- read.csv("data/Intersections/BAM_ident_FORID_novtest.csv")
+#pts3 <- read.csv("data/Intersections/FORID_BAMv4_Nov29.csv")
+#pts3 <- read.csv("data/Intersections/FORID_BAMv4_Nov29-zSpGroup.csv")
+```
+
+#### Load point count data
+
+```{r load.pointdountloc.data, echo=F, eval=F}
+#pts3 <- read.csv("data/Intersections/BBS_BAM_Atlas_MigLayer_Jan22_2017-zSpGroup-SS.csv")
+#pts3.legend<-data.frame(table="BBS_BAM_Atlas_MigLayer_Jan22_2017-zSpGroup-SS", field=colnames(pts3), description="")
+#write.table(pts3.legend, file="data/Intersections/BBS_BAM_Atlas_MigLayer_Jan22_2017-zSpGroup-SS.legend.csv", row.names=F, sep=",")
+
+#pts3.reduced <- pts3[c("SS", "BecZone", "SpeciesGroup", "Age", "Height", "Rank", "OBJECTID", "SS", "SS.archive")]
+```
+
+##### Reduced dataset
+
+``` {r}
+load("cache/bird_vri_dat_ready.RData")
+colnames(bird_vri_dat_ready)[which(colnames(bird_vri_dat_ready) == "SS_derived")] <- "SS"
+pts3.reduced <- bird_vri_dat_ready[c("ForID", "SS", "BecZone", "SpeciesGroup", "Age", "Height", "Rank", "polygon_area_cal", "VRI_Layer")]
+colnames(pts3.reduced)[which(colnames(pts3.reduced) == "polygon_area_cal")] <- "ForestArea"
+```
+
+#### Aggregate to identify how many survey sites (point count locations) per forest stand type
+
+The output will only contain a given forest stand ID if that stand type was intersected with a point count location from the BAM database. 
+
+``` {r aggregate.to.forID, echo=T}
+pts3.tmp <- pts3.reduced[c("ForID", "SS")]
+pts3.tmp <- pts3.tmp[!duplicated(pts3.tmp),] # removes duplicate SSs/stations
+sampSS <- aggregate(pts3.tmp$SS, by=list(ForID=pts3.tmp$ForID), FUN=length) #aggregate to calculate # of SS per ForID
+colnames(sampSS)[which(colnames(sampSS)=="x")] <- "NumPtCtStations" #rename count to NumPtCtStations
+```
+
+``` {r merge.and.clean1, echo=T}
+sampSS <- merge(mastermatrix, sampSS[c("ForID", "NumPtCtStations")], by="ForID", all.x=T) # merges to add a # point count stations for all forest stand types
+sampSS[is.na(sampSS$NumPtCtStations),]$NumPtCtStations <- 0 # set all "NA" num count stations to 0. They weren't in Trish's intersected file, so they don't have any point count samples
+kable(head(sampSS))
+```
+
+## 2. Re-add ranks and areas of the different forest stand types
+
+##### Load ranks and areas for all forest stand type (ForID)
+
+Can't use bird_vri file from above because it only has information for stands intersected by bird data. 
+
+``` {r}
+ranks.areas <- read.csv("data/ForID_Ranks_final_long.csv", header=T)
+reps <- merge(sampSS, ranks.areas[c("ForID", "FinalRank", "ForestArea")], by="ForID", all.x=T)
+head(reps)
+```
+
+## 3. Do some pre-processing to clean up the files 
+
+``` {r clean.reps.file, echo=T}
+reps$pr.area <- 100*(reps$ForestArea/ sum(reps$ForestArea, na.rm=T))
+reps$pr.pts <-   100*(reps$NumPtCtStations/ sum(reps$NumPtCtStations))
+reps$PtsPerHa <- reps$NumPtCtStations / reps$ForestArea
+
+```
+
+### clean up to reduce to ranked stands above 50 Ha
+
+``` {r create.subsets, echo=T}
+reps.ranked <- reps[reps$FinalRank %in% 1:6 & reps$ForestArea >= 50,] #ranked and above area threshold
+reps.sampled <- reps[reps$NumPtCtStations != 0,]
+reps.sampled.ranked <- reps.ranked[reps.ranked$NumPtCtStations > 0,]
+reps.notsampled <- reps.ranked[reps.ranked$NumPtCtStations == 0,]
+reps.noNA <- reps[!is.na(reps$FinalRank),]
+reps.noNA$Age <- factor(reps.noNA$Age, ordered=T)
+reps.noNA$Height <- factor(reps.noNA$Height, ordered=T)
+```
+
+``` {r Fig.2, echo=F, eval=T, fig.height=10, fig.width=7.5, dpi=500, dev='jpeg',message=F}
+reps.r.p <- reps.ranked[reps.ranked$ForestArea >= 50,]
+
+reps.r.p <- melt(reps.r.p[c("ForID", "pr.area", "pr.pts", "FinalRank", "BecZone")], id.vars=c("ForID", "FinalRank", "BecZone"))
+colnames(reps.r.p)[4:5] <-c("Class", "Percentage")
+reps.r.p$Class <- as.character(reps.r.p$Class)
+reps.r.p[reps.r.p$Class == "pr.area",]$Class <- "Percentage of total ranked forest area in this specific Forest Type"
+reps.r.p[reps.r.p$Class == "pr.pts",]$Class <- "Percentage of all Point Counts Stations that were conducted in this Forest Type"
+reps.r.p$FinalRank <- paste("FinalRank", reps.r.p$FinalRank, sep=" ")
+reps.r.p <- merge(reps.r.p, beclookup, by="BecZone", all.x=T)
+reps.r.p$BEC.Zone.Name <- factor(reps.r.p$BEC.Zone.Name)
+reps.list <- split(reps.r.p, reps.r.p$BEC.Zone.Name)
+```
+
+``` {r format.reps.file , echo=T, eval=T}
+reps$PtsPer100Ha <- reps$PtsPerHa * 100
+reps.cleaned <- reps
+reps.cleaned$KeepDelete <- "Keep"
+reps.cleaned$KeepDelete[!reps.cleaned$FinalRank %in% 1:6] <- "Unranked"
+reps.cleaned$KeepDelete[reps.cleaned$ForestArea < 50] <- "TooSmall"
+```
+
+``` {r write.representation.files, echo=T, eval=TRUE}
+reps <- reps[order(reps$PtsPerHa, reps$ForestArea, reps$FinalRank),]
+write.table(reps, file="output/BirdsamplingStandTypes.2018.01.02.csv", row.names=F, col.names=T, sep=",")
+write.table(reps.cleaned, file="output/BirdsamplingStandTypes-cleaned.2018.01.02.csv", row.names=F, col.names=T, sep=",")
+```
+
+``` {r Fig.3, echo=F, eval=T, message=F}
+reps.htage.p <- reps.ranked[reps.ranked$ForestArea >= 50,]
+
+reps.htage.p <- melt(reps.htage.p[c("ForID", "pr.area", "pr.pts", "Age", "Height", "BecZone")], id.vars=c("ForID","BecZone", "Age", "Height"))
+colnames(reps.htage.p)[5:6] <-c("Class", "Percentage")
+reps.htage.p$Class <- as.character(reps.htage.p$Class)
+reps.htage.p[reps.htage.p$Class == "pr.area",]$Class <- "Percentage of total ranked forest area in this specific Forest Type"
+reps.htage.p[reps.htage.p$Class == "pr.pts",]$Class <- "Percentage of all Point Counts Stations that were conducted in this Forest Type"
+reps.htage.p$Age <- paste("Age =", reps.htage.p$Age, "years", sep=" ")
+reps.htage.p$Height <- paste("Height Class", reps.htage.p$Height, sep=" ")
+reps.htage.p <- merge(reps.htage.p, beclookup, by="BecZone")
+reps.htage.p$Age <- factor(reps.htage.p$Age, levels=c("Age = 3_30 years","Age = 31_80 years", "Age = 81_120 years", "Age = 121_250 years",  "Age = 250 years"))
+reps.htage.p$Height <- factor(reps.htage.p$Height, levels=c("Height Class 1",  "Height Class 2" , "Height Class 3",  "Height Class 4+"))
+
+reps.htage.p$BEC.Zone.Name <- factor(reps.htage.p$BEC.Zone.Name)
+reps.list2 <- split(reps.htage.p, reps.htage.p$BEC.Zone.Name)
+```
+
+## How many stand types are there?
+
+There are `r nrow(mastermatrix)` theoretically possible forest type stands, i.e., the factorial combination of the below four factors. But only `r nrow(reps.ranked)` of these combinations were ranked in the Stand Ranking Matrix, since some forest types are improbable/impossible, and therefore less than 50 Ha of forested area.
+
+* `r length(beclookup[beclookup$InMatrix=="Yes",]$BecZone)`  BEC zones
+* `r length(unique(mastermatrix$SpeciesGroup))`  species groups
+* `r length(levels(reps.noNA$Age))`  age classes
+* `r length(levels(reps.noNA$Height))`   height classes
+
+`r kable(vartab)`
+
+## How well are the stand types sampled by bird point counts? 
+
+* BAM has data from `r round(sum(reps$TotalCountSS),0)` point count survey locations within the `r nrow(mastermatrix)` forest stand types we're interested in. (there were `r sum(reps$CountSS, na.rm=T)` total point counts locations in BC, but many fell outside the study area of interest)
+* `r nrow(reps.sampled)` (`r 100*nrow(reps.sampled)/nrow(reps)`%) stand types have been sampled by at least one point count station.
+* `r nrow(reps.sampled.ranked)` (`r 100*nrow(reps.sampled.ranked)/nrow(reps.ranked)`%) _ranked_ stand types have been sampled by at least one point count station.
+* `r nrow(reps.notsampled)` (`r 100*nrow(reps.notsampled)/nrow(reps.ranked)`%) ranked stand types have _not_ been sampled by any bird point counts.
+
+## How are those point count stations distributed across the ranked forest stand types?
+
+* The most point count stations (n= `r max(reps.ranked$TotalCountSS, na.rm=T)`) are located in the `r reps.ranked[which.max(reps.ranked$TotalCountSS),]$ForID` forest stand type.
+* The fewest point count stations (aside from 0) in a stand is `r min(reps.ranked$TotalCountSS[reps.ranked$TotalCountSS !=0], na.rm=T)`. 
+* After excluding all forest stand types with 0 point counts, the mean number of stations in the different forest types is `r mean(reps.ranked$TotalCountSS[reps.ranked$TotalCountSS !=0], na.rm=T)`
+
+## How representative is the sampling, compared to forest area? 
+
+To identify specific forest stand types that aren't sampled by bird point counts, explore the accompanying Excel file (__BirdsamplingStandTypes_Sharing-2017.Mar.xlsx__). The file lists all forest stand types that have at least 50 Ha of forest. Columns 1-4 correspond to the variables outlining the ranking matrix. Each cell in TotalCountSS and PtsPer100Ha can be matched to a cell in the ranking matrix.
+
+The information can also be viewed in the traditional matrix format: __Matrix.Rank.ForestArea.NumPointCounts.xlsx__
+
+``` {r, echo=F}
+reps2 <- reps[!is.na(reps$Age),]
+reps2 <- reps2[!is.na(reps2$BecZone),]
+reps2 <- reps2[reps2$FinalRank %in% 1:6,]
+kable(reps2[1:5,c("BecZone", "SpeciesGroup", "Age", "Height", "NumPtCtStations", "ForestArea")], row.names=F, caption="Example 5 rows of the Excel file")
+```
+
+# How to use the accompanying Excel File: 
+
+### 1. Which stand types have no bird data?
+
+* Filter TotalCountSS so we only see 0. Shows only stands that have **not** been sampled by any bird point counts (in the BAM dataset).
+
+### 2. Of those without bird data, which make up the largest area?
+
+* Sort by ForestArea from Largest to Smallest. To achieve representative sampling, one should preferentially do more point count surveys in the forest stand types with the greatest area.
+
+### 3. And if I only care about a specific BEC Zone?
+
+* Filter by BEC to show only the results for the BEC(s) you care about. 
+
+### 4. How many point counts do I need in a stand type to be representative of area?
+
+* Generally...
+  * ... sort by ForestArea from Largest to Smallest
+  * ... sort by TotalCountSS from Smallest to Largest
+* Contact Nicole (nbarker@ualberta.ca) for specific numbers. 
+
+# sampling representation at a glance
+
+The figures below are meant to give an impression of how forest area compares to point count sampling. 
+
+Forest stand types are listed along the x axis. Bar height indicates the percentage that each stand type contributes to total forest area (green) or total # of point count stations (pink).
+
+When point count sampling is proportionate to forest area, the pink and green bars are equal height. If sampling were representative across all forest types, the pink and green bars for each forest type would be the same height. Axes are standardized so that percentages can be compared across BECs and Age/Height classes.  e.g., 
+
+* The forest stand type with the greatest area is: `r reps.ranked[which.max(reps.ranked$ForestArea),]["Age"]` year old stands of `r reps.ranked[which.max(reps.ranked$ForestArea),][["SpeciesGroup"]]` forest in the `r beclookup[beclookup$BecZone == reps.ranked[which.max(reps.ranked$ForestArea),][["BecZone"]],]$BEC.Zone.Name` BEC Zone that are `r htlookup[htlookup$Height %in% reps.ranked[which.max(reps.ranked$ForestArea),][["Height"]],]$ForestHeight` m tall. This has the tallest green bar, with this stand type representing `r round(reps.ranked[which.max(reps.ranked$ForestArea),][["pr.area"]],1)`% of the total ranked forest area.
+* Although `r reps.ranked[which.max(reps.ranked$ForestArea),]$TotalCountSS` point count stations are located in that type of forest, this is not representative compared to the forest area. It's only `r round(reps.ranked[which.max(reps.ranked$ForestArea),][["pr.pts"]],1)`% of the points. 
+
+
+
+### `r names(reps.list2)[1]`
+
+``` {r, fig.height=18.3, fig.width=15, echo=F, eval=F}
+ggplot(reps.list[[1]], aes(x=ForID, y=Percentage, col=Class, fill=Class)) + geom_col(position="dodge") + facet_wrap(~Rank, ncol=1, scales="free_x") + myfacettheme1 + ylim(0,5) + xlab("Forest Type") + scale_fill_manual(values=c("#F0469b","#2F5832")) + scale_colour_manual(values=c("#F0469b","#2F5832"))
+```
+
+``` {r, fig.height=18.3, fig.width=15, echo=F, eval=T, warning=F}
+ggplot(reps.list2[[1]], aes(x=ForID, y=Percentage, col=Class, fill=Class)) + geom_col(position="dodge", na.rm=FALSE) + facet_wrap(~Age*Height, ncol=4, scales="free_x") + myfacettheme1 + ylim(0,5) + xlab("Forest Type") + scale_fill_manual(values=c("#F0469b","#2F5832")) + scale_colour_manual(values=c("#F0469b","#2F5832"))
+```
+
+### `r names(reps.list2)[2]`
+``` {r, fig.height=18.3, fig.width=15, echo=F, eval=F}
+ggplot(reps.list[[2]], aes(x=ForID, y=Percentage, col=Class, fill=Class)) + geom_col(position="dodge") + facet_wrap(~Rank, ncol=1, scales="free_x") + myfacettheme1 + ylim(0,5)+ scale_fill_manual(values=c("#F0469b","#2F5832")) + scale_colour_manual(values=c("#F0469b","#2F5832")) + xlab("Forest Type")
+```
+
+``` {r, fig.height=18.3, fig.width=15, echo=F, eval=T}
+ggplot(reps.list2[[2]], aes(x=ForID, y=Percentage, col=Class, fill=Class)) + geom_col(position="dodge", na.rm=FALSE) + facet_wrap(~Age*Height, ncol=4, scales="free_x") + myfacettheme1 + ylim(0,5) + xlab("Forest Type") + scale_fill_manual(values=c("#F0469b","#2F5832")) + scale_colour_manual(values=c("#F0469b","#2F5832"))
+```
+
+### `r names(reps.list2)[3]`
+``` {r, fig.height=18.3, fig.width=15, echo=F, eval=F}
+ggplot(reps.list[[3]], aes(x=ForID, y=Percentage, col=Class, fill=Class)) + geom_col(position="dodge") + facet_wrap(~Rank, ncol=1, scales="free_x") + myfacettheme1 + ylim(0,5)+ scale_fill_manual(values=c("#F0469b","#2F5832")) + scale_colour_manual(values=c("#F0469b","#2F5832")) + xlab("Forest Type")
+```
+
+``` {r, fig.height=18.3, fig.width=15, echo=F, eval=T}
+ggplot(reps.list2[[3]], aes(x=ForID, y=Percentage, col=Class, fill=Class)) + geom_col(position="dodge", na.rm=FALSE) + facet_wrap(~Age*Height, ncol=4, scales="free_x") + myfacettheme1 + ylim(0,5) + xlab("Forest Type") + scale_fill_manual(values=c("#F0469b","#2F5832")) + scale_colour_manual(values=c("#F0469b","#2F5832"))
+```
+
+### `r names(reps.list2)[4]`
+``` {r, fig.height=18.3, fig.width=15, echo=F, eval=F}
+ggplot(reps.list[[4]], aes(x=ForID, y=Percentage, col=Class, fill=Class)) + geom_col(position="dodge") + facet_wrap(~Rank, ncol=1, scales="free_x") + myfacettheme1 + ylim(0,5)+ scale_fill_manual(values=c("#F0469b","#2F5832")) + scale_colour_manual(values=c("#F0469b","#2F5832")) + xlab("Forest Type")
+```
+
+``` {r, fig.height=18.3, fig.width=15, echo=F, eval=T}
+ggplot(reps.list2[[4]], aes(x=ForID, y=Percentage, col=Class, fill=Class)) + geom_col(position="dodge", na.rm=FALSE) + facet_wrap(~Age*Height, ncol=4, scales="free_x") + myfacettheme1 + ylim(0,5) + xlab("Forest Type") + scale_fill_manual(values=c("#F0469b","#2F5832")) + scale_colour_manual(values=c("#F0469b","#2F5832"))
+```
+
+### `r names(reps.list2)[5]`
+``` {r, fig.height=18.3, fig.width=15, echo=F, eval=F}
+ggplot(reps.list[[5]], aes(x=ForID, y=Percentage, col=Class, fill=Class)) + geom_col(position="dodge") + facet_wrap(~Rank, ncol=1, scales="free_x") + myfacettheme1 + ylim(0,5)+ scale_fill_manual(values=c("#F0469b","#2F5832")) + scale_colour_manual(values=c("#F0469b","#2F5832")) + xlab("Forest Type")
+```
+
+``` {r, fig.height=18.3, fig.width=15, echo=F, eval=T}
+ggplot(reps.list2[[5]], aes(x=ForID, y=Percentage, col=Class, fill=Class)) + geom_col(position="dodge", na.rm=FALSE) + facet_wrap(~Age*Height, ncol=4, scales="free_x") + myfacettheme1 + ylim(0,5) + xlab("Forest Type") + scale_fill_manual(values=c("#F0469b","#2F5832")) + scale_colour_manual(values=c("#F0469b","#2F5832"))
+```
+
+### `r names(reps.list2)[6]`
+``` {r, fig.height=18.3, fig.width=15, echo=F, eval=F}
+ggplot(reps.list[[6]], aes(x=ForID, y=Percentage, col=Class, fill=Class)) + geom_col(position="dodge") + facet_wrap(~Rank, ncol=1, scales="free_x") + myfacettheme1 + ylim(0,5)+ scale_fill_manual(values=c("#F0469b","#2F5832")) + scale_colour_manual(values=c("#F0469b","#2F5832")) + xlab("Forest Type")
+```
+
+``` {r, fig.height=18.3, fig.width=15, echo=F, eval=T}
+ggplot(reps.list2[[6]], aes(x=ForID, y=Percentage, col=Class, fill=Class)) + geom_col(position="dodge", na.rm=FALSE) + facet_wrap(~Age*Height, ncol=4, scales="free_x") + myfacettheme1 + ylim(0,5) + xlab("Forest Type") + scale_fill_manual(values=c("#F0469b","#2F5832")) + scale_colour_manual(values=c("#F0469b","#2F5832"))
+```
+
+### `r names(reps.list2)[7]`
+``` {r, fig.height=18.3, fig.width=15, echo=F, eval=F}
+ggplot(reps.list[[7]], aes(x=ForID, y=Percentage, col=Class, fill=Class)) + geom_col(position="dodge") + facet_wrap(~Rank, ncol=1, scales="free_x") + myfacettheme1 + ylim(0,5)+ scale_fill_manual(values=c("#F0469b","#2F5832")) + scale_colour_manual(values=c("#F0469b","#2F5832")) + xlab("Forest Type")
+```
+
+``` {r, fig.height=18.3, fig.width=15, echo=F, eval=T}
+ggplot(reps.list2[[7]], aes(x=ForID, y=Percentage, col=Class, fill=Class)) + geom_col(position="dodge", na.rm=FALSE) + facet_wrap(~Age*Height, ncol=4, scales="free_x") + myfacettheme1 + ylim(0,5) + xlab("Forest Type") + scale_fill_manual(values=c("#F0469b","#2F5832")) + scale_colour_manual(values=c("#F0469b","#2F5832"))
+```
+
+### `r names(reps.list2)[8]`
+``` {r, fig.height=18.3, fig.width=15, echo=F, eval=F}
+ggplot(reps.list[[8]], aes(x=ForID, y=Percentage, col=Class, fill=Class)) + geom_col(position="dodge") + facet_wrap(~Rank, ncol=1, scales="free_x") + myfacettheme1 + ylim(0,5)+ scale_fill_manual(values=c("#F0469b","#2F5832")) +  scale_colour_manual(values=c("#F0469b","#2F5832")) + xlab("Forest Type")
+```
+
+``` {r, fig.height=18.3, fig.width=15, echo=F, eval=T}
+ggplot(reps.list2[[8]], aes(x=ForID, y=Percentage, col=Class, fill=Class)) + geom_col(position="dodge", na.rm=FALSE) + facet_wrap(~Age*Height, ncol=4, scales="free_x") + myfacettheme1 + ylim(0,5) + xlab("Forest Type") + scale_fill_manual(values=c("#F0469b","#2F5832")) + scale_colour_manual(values=c("#F0469b","#2F5832"))
+```
+

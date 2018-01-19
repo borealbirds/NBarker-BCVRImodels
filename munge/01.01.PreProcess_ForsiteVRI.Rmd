@@ -1,0 +1,120 @@
+---
+title: "Preprocess Full Forsite VRI Files"
+author: "Nicole Barker"
+date: "Last run: Jan 8, 2018"
+output: 
+  word_document:
+    reference_docx: ../styles/ReportFormat_1.docx
+---
+## Script Abstract
+Initial inspection of the attribute table exported from the Forsite-modified version of the VRI dataset. Identifies which field is a unique identifier. Saves by caching as RData to the cache folder. 
+
+## Background
+
+**FILES**
+
+1. FORSITE_all_regions__Nicoles_VRI_fields_fixednames.csv
+
+In this script, I: 
+
+* Inspect for duplicates
+* Find a unique stand identifier to link back to the Shapefile (for eventual prediction)
+
+Note that CanfortflAttributeTable.txt is processed in another file. 
+
+
+``` {r setup, echo=F, message=F, warning=F}
+require(knitr)
+opts_knit$set(root.dir = '..')
+```
+
+``` {r load.project, message=F}
+require(ProjectTemplate)
+load.project()
+options(digits=12)
+```
+
+
+## migratory_bird_BAMused.txt
+
+### Filter out some columns I know I won't need
+
+``` {r, eval=T}
+if ("vri_forsite_mostfields.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching 
+  load("cache/vri_forsite_mostfields.RData")                    #on existence of cached object.
+  } 
+
+if ("vri_forsite_mostfields.RData" %in% dir("cache") == FALSE) { #conditional statements to automate loading and caching 
+  if ("vri_forsite_allfields.RData" %in% dir("cache") == TRUE) { #conditional statements to automate loading and caching  
+    load("cache/vri_forsite_allfields.RData")                    #on existence of cached object.
+    }
+    if ("vri_forsite_allfields.RData" %in% dir("cache") == FALSE) { #conditional statements to automate loading and caching 
+      vri_forsite_allfields <- read.csv("data/migratory_bird_BAMused.txt", header=T)
+      cache("vri_forsite_allfields")
+      }
+    
+    cols_to_remove <- colnames(vri_forsite_allfields)[grep("DEAD_VOL", colnames(vri_forsite_allfields))]
+    cols_to_remove <- c(cols_to_remove, colnames(vri_forsite_allfields)[grep("LIVE_VOL", colnames(vri_forsite_allfields))])
+    cols_to_remove <- c(cols_to_remove, colnames(vri_forsite_allfields)[grep("BIOMASS", colnames(vri_forsite_allfields))])
+    cols_to_remove <- c(cols_to_remove, colnames(vri_forsite_allfields)[grep("LINE_", colnames(vri_forsite_allfields))])
+    cols_to_remove <- c(cols_to_remove, colnames(vri_forsite_allfields)[grep("LABEL_", colnames(vri_forsite_allfields))])
+    cols_to_remove <- c(cols_to_remove, colnames(vri_forsite_allfields)[grep("STAND_VOL", colnames(vri_forsite_allfields))])
+    cols_to_remove <- c(cols_to_remove, colnames(vri_forsite_allfields)[grep("CRUISE", colnames(vri_forsite_allfields))])
+    cols_to_remove <- c(cols_to_remove, colnames(vri_forsite_allfields)[grep("LABEL", colnames(vri_forsite_allfields))])
+    cols_to_remove <- c(cols_to_remove, colnames(vri_forsite_allfields)[grep("QUAD", colnames(vri_forsite_allfields))])
+    
+    vri_forsite_mostfields <- vri_forsite_allfields[-which(colnames(vri_forsite_allfields) %in% cols_to_remove)]
+    cache("vri_forsite_mostfields")
+}
+```
+
+``` {r}
+kable(data.frame(ColNames=colnames(vri_forsite_mostfields)))
+vri_forsite <- vri_forsite_mostfields;rm(vri_forsite_mostfields)
+```
+
+#### Initial exploration to understand the format of the shapefile attribute table
+
+``` {r}
+tmp <- as.data.frame(do.call(rbind, lapply(vri_forsite, function(x) {length(unique(x))})))
+tmp[which.max(tmp$V1),] == nrow(vri_forsite) # check to make sure there is a unique ID for stands
+rownames(tmp)[which.max(tmp$V1)]
+```
+
+* Number of unique objects in the polygon attribute table (OBJECT_ID): `r length(unique(vri_forsite$OBJECTID))`
+* Number of unique polygons in the polygon attribute table (FEATURE_ID): `r length(unique(vri_forsite$FEATURE_ID))`
+* Number of rows in the polygon attribute table: `r nrow(vri_forsite)`
+* Number of unique forest stand types in the polygon attribute table (ForID): `r length(unique(vri_forsite$ForID))` 
+* Number of possible unique forest stand types based on combination of 4 attributes: `r length(unique(mastermatrix$ForID))`
+
+**Conclusions:** 
+
+* both OBJECTID and FEATURE_ID are unique identifiers for rows (polygons) in this file.
+* No duplicates because same number of rows as unique polygon IDs. 
+
+## Add in polygon area
+
+In a previous analysis, I calculated the area of each polygon using the calculate geometry command in ArcMap. 
+Here I'm merging polygon area with the remaining VRI attributes in this file. 
+
+``` {r}
+load("cache/mig_birds_Layer_polyarea_forstandatts.RData")
+vri_forsite2 <- merge(mig_birds_Layer_polyarea_forstandatts[c("FEATURE_ID", "polygon_area_cal")], vri_forsite, by="FEATURE_ID", all=T)
+nrow(vri_forsite) == nrow(vri_forsite2)
+vri_forsite <- vri_forsite2; rm(vri_forsite2); gc()
+```
+
+#### Add source field and a unique ID field
+
+``` {r}
+vri_forsite$VRI_Layer <- "Forsite_VRI"
+vri_forsite$StandID <- paste(vri_forsite$VRI_Layer, vri_forsite$OBJECTID, sep=".")
+length(unique(vri_forsite$StandID))
+nrow(vri_forsite)
+```
+
+#### Save file
+
+``` {r}
+cache("vri_forsite")
+```

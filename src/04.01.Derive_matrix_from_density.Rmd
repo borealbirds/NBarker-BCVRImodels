@@ -1,0 +1,122 @@
+---
+title: "Derive matrix from density" 
+author: "Nicole Barker"
+date: "Last run: Jan 9, 2018"
+output: 
+  word_document:
+    reference_docx: ../styles/ReportFormat_1.docx
+---
+
+##Script Abstract
+
+
+
+## Goal: Create a matrix in Kari's format that assigns 'ranks' to stands 
+
+
+
+**Steps **
+
+1. Load data (Canfor + Forsite)
+2. Set training and testing datasets
+3. Run BRT with full possible set of covariates
+4. Simplify BRT to reduce covariates
+5. Generate predictions from BRT
+6. In another script .... explore how to convert density to scores and generate my own rank matrix. 
+
+
+``` {r setup, echo=F, message=F, warning=F}
+require(knitr)
+opts_knit$set(root.dir = '..')
+knitr::opts_chunk$set(
+  fig.path = "figures/"
+)
+```
+
+``` {r load.project, message=F}
+require(ProjectTemplate)
+load.project()
+options(digits=12)
+```
+
+## 1. Load predictions
+
+``` {r}
+preds_forsite <- read.csv("output/predsForsite_2018.01.09.csv", header=T)
+```
+
+## 2. Merge with vri data to obtain forest stand attributes
+
+``` {r}
+load("cache/vri_forsite_postclean.RData")
+
+```
+
+#### Clean up
+
+##### Keep only Becs, SpGroups, Age, and Height in the mastermatrix
+
+``` {r}
+vri_forsite_postclean$ForID <- with(vri_forsite_postclean, paste(BecZone, SpeciesGroup, Age, Height, sep="."))
+vri_forsite_Inmastermatrix <- subset(vri_forsite_postclean, vri_forsite_postclean$ForID %in% mastermatrix$ForID)
+```
+
+#### Identify desired columns
+
+``` {r}
+cols_to_keep_prediction_matrix <- c("FEATURE_ID", "BecZone", "BEC_SUBZONE", 
+                                    "Age", "Height", "SpeciesGroup", 
+                                    "SPECIES_CD_1", "SPECIES_CD_2", "Rank") 
+
+cols_to_keep_kari_matrix <- c("BecZone", "Age", "Height", "SpeciesGroup", "preds") 
+```
+
+#### Create dataset with VRI attributes and predictions
+
+``` {r}
+preds_forsite_small <- merge(preds_forsite, vri_forsite_Inmastermatrix[cols_to_keep_prediction_matrix], by="FEATURE_ID")
+```
+
+## 3. Aggregate into various matrix formats
+
+### Kari's matrix
+
+``` {r}
+preds_forsite_kariMatrix <- preds_forsite_small[cols_to_keep_kari_matrix]
+
+colnames(preds_forsite_kariMatrix)[which(colnames(preds_forsite_kariMatrix) == "preds")] <- "value"
+
+kable(preds_forsite_kariMatrix[1:15,], row.names=F)
+
+lapply(preds_forsite_kariMatrix[1:4], function(x) {unique(x)})
+```
+
+#### Cast out 
+
+``` {r}
+pred_matrix_Kariformat <- cast(preds_forsite_kariMatrix, BecZone + SpeciesGroup ~ Age + Height , fun.aggregate = mean) 
+
+pred_matrix_Kariformat <- pred_matrix_Kariformat[c("BecZone", "SpeciesGroup", 
+                                                   "3_30_1", "3_30_2", "3_30_3", "3_30_4+", 
+                                                   "31_80_1", "31_80_2", "31_80_3", "31_80_4+", 
+                                                   "81_120_1", "81_120_2", "81_120_3", "81_120_4+",
+                                                   "121_250_1", "121_250_2", "121_250_3", "121_250_4+",
+                                                   "250_1", "250_2", "250_3", "250_4+")]
+
+write.table(pred_matrix_Kariformat, file="output/Matrix_Density_KariFormat.csv", sep=",", row.names=F, col.names=T)
+
+```
+
+#### Scale to 6
+
+``` {r}
+
+tmp <- pred_matrix_Kariformat[3:ncol(pred_matrix_Kariformat)]
+
+pred_matrix_Kariformat_scaled <- cbind(pred_matrix_Kariformat[1:2], 6*(tmp / max(tmp, na.rm=T)))
+
+summary(pred_matrix_Kariformat_scaled)
+
+write.table(pred_matrix_Kariformat_scaled, file="output/Matrix_Density_KariFormat_scaled.csv", sep=",", row.names=F, col.names=T)
+
+```

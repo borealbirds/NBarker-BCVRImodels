@@ -1,0 +1,73 @@
+---
+title: "Preprocess Canfor TFL VRI File"
+author: "Nicole Barker"
+date: "Last run: Jan 8, 2018"
+output: 
+  word_document:
+    reference_docx: ../styles/ReportFormat_1.docx
+---
+## Script Abstract
+Initial inspection of the attribute table exported from the Canfor TFL VRI dataset. Identifies which field is a unique identifier. Saves by caching as RData to the cache folder. 
+
+## Background
+The Forsite VRI file (from the provincial dataset) is missing data for some regions. Canfor provided me the VRI data for their TFLs. I needed to process it separately. Note that because it wasn't processed by Forsite, the stands do not have ranks associated with them. 
+
+**FILES**
+
+1. CanfortflAttributeTable.txt
+
+In this script, I: 
+
+* Inspect for duplicates
+
+Note that FORSITE_all_regions__Nicoles_VRI_fields_fixednames.csv is processed in another file. 
+
+
+``` {r setup, echo=F, message=F, warning=F}
+require(knitr)
+opts_knit$set(root.dir = '..')
+```
+
+``` {r load.project, message=F}
+require(ProjectTemplate)
+load.project()
+options(digits=12)
+```
+
+## canfortflAttributeTable.txt
+
+``` {r}
+vri_canfortfl <- read.csv("data/canfortflAttributeTable.txt", header=T)
+
+    cols_to_remove <- colnames(vri_canfortfl)[grep("DEAD_VOL", colnames(vri_canfortfl))]
+    cols_to_remove <- c(cols_to_remove, colnames(vri_canfortfl)[grep("LIVE_VOL", colnames(vri_canfortfl))])
+    cols_to_remove <- c(cols_to_remove, colnames(vri_canfortfl)[grep("BIOMASS", colnames(vri_canfortfl))])
+    cols_to_remove <- c(cols_to_remove, colnames(vri_canfortfl)[grep("LINE_", colnames(vri_canfortfl))])
+    cols_to_remove <- c(cols_to_remove, colnames(vri_canfortfl)[grep("LABEL_", colnames(vri_canfortfl))])
+    cols_to_remove <- c(cols_to_remove, colnames(vri_canfortfl)[grep("STAND_VOL", colnames(vri_canfortfl))])
+    cols_to_remove <- c(cols_to_remove, colnames(vri_canfortfl)[grep("CRUISE", colnames(vri_canfortfl))])
+    cols_to_remove <- c(cols_to_remove, colnames(vri_canfortfl)[grep("LABEL", colnames(vri_canfortfl))])
+    cols_to_remove <- c(cols_to_remove, colnames(vri_canfortfl)[grep("QUAD", colnames(vri_canfortfl))])
+    
+    vri_canfortfl_mostfields <- vri_canfortfl[-which(colnames(vri_canfortfl) %in% cols_to_remove)]
+
+```
+
+#### Initial exploration to understand the format of the shapefile attribute table
+
+``` {r}
+tmp <- as.data.frame(do.call(rbind, lapply(vri_canfortfl_mostfields, function(x) {length(unique(x))})))
+tmp[which.max(tmp$V1),] == nrow(vri_canfortfl_mostfields) # check to make sure there is a unique ID for stands
+rownames(tmp)[which.max(tmp$V1)]
+vri_canfortfl_mostfields$VRI_Layer <- "Canfor_TFL"
+```
+
+* Number of unique objects in the polygon attribute table (OBJECTID): `r length(unique(vri_canfortfl_mostfields$OBJECTID))`
+* Length of the attribute table (nrows): `r nrow(vri_canfortfl_mostfields)`
+
+#### Save file
+
+``` {r}
+kable(data.frame(ColNames=colnames(vri_canfortfl_mostfields)))
+cache("vri_canfortfl_mostfields")
+```

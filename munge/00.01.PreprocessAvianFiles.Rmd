@@ -1,0 +1,791 @@
+---
+title: "00.01.MergeAvianFiles"
+author: "Nicole Barker"
+date: "Last run: Jan 8, 2017"
+output: 
+  word_document:
+    reference_docx: ../styles/ReportFormat_1.docx
+---
+## Script Abstract
+
+Quality-checks, corrects, pre-processes, and merges the various tables from BAM's Avian Database. Removes duplicates. Performs some initial tests of patterns in avian data by survey method to help decide how to harmonize the data. 
+Combines spatial data (SS), survey instance (PKEY), and point count (ABUND) data into one flat dataset and saves as csv for future use: _data/birddata_preprocess1.csv_
+
+
+## Background
+On Nov 30, 2017, Trish provided me with the Access Database of BAM's avian data: COFI_BC_NOV30_2017.accdb. I exported the 3 tables based on BAM's standard data format.
+
+**FILES**
+
+1. **BC_COFI_XY.csv**
+2. **BC_COFI_PKEY.txt**
+3. **BC_COFI_POINTCOUNT.txt**
+
+This script does the following
+
+* Look for and eliminate duplications
+* Correct any errors noticed during pre-processing
+* Save a pre-processed table of point count data for future use: data/birddata_preprocess1.csv 
+
+
+``` {r setup, echo=F, message=F, warning=F}
+require(knitr)
+opts_knit$set(root.dir = '..')
+```
+
+``` {r load.project, message=F}
+require(ProjectTemplate)
+load.project()
+options(digits=12)
+```
+
+## 1. XY Coordinates of each survey site: *BC_COFI_XY.txt*
+
+### Initial Quality Check, Removal of Duplicates, Check for Missing DAta
+
+``` {r load.xy}
+xy<- read.csv("data/BC_COFI_XY.csv")
+kable(head(xy), row.names=F)
+```
+
+**Checking for Missing Data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind,lapply(xy, function(x) {sum(is.na(x))}))), caption="Number of missing values per column")
+kable(as.data.frame(do.call(rbind,lapply(xy, function(x) {length(unique(x))}))), caption="Number unique values per column")
+nrow(xy)
+length(unique(xy$SS))
+```
+
+``` {r}
+xy$Missing_XY <- NA
+xy$Missing_XY[!(is.na(xy$X))] <- "NOT missing XY"
+```
+
+**Notes**
+
+* `r unique(xy[is.na(xy$X),]$PCODE)` have SSs without X coordinates
+* ACTION: Long-term: Suggest Trish could look into datasets without coordinates. 
+* ACTION: Short-term: Keep them for now but they'll be dropped at covariate stage
+
+### Add Covariates at location (XY /SS) level
+
+#### Load SS Covariates
+
+``` {r}
+ss.covar <- read.csv("data/covariatesforoffsetMay2017Timezone.csv", header=T)
+colnames(ss.covar)
+unique(ss.covar$PCODE)
+ss.covar.uniquevalues <- as.data.frame(do.call(rbind,lapply(ss.covar, function(x) { length(unique(x))})))
+colnames(ss.covar.uniquevalues) <- c("Num.Unique.Values")
+kable(ss.covar.uniquevalues)
+```
+
+#### Merge SS covariates with xy table by SS
+
+
+``` {r}
+xy.ss.covar <- merge(xy, ss.covar, by="SS", all=T)
+```
+
+**Some Quality Checks*
+
+``` {r}
+xy.ss.covar$PCODE.x <- as.character(xy.ss.covar$PCODE.x)
+xy.ss.covar$PCODE.y <- as.character(xy.ss.covar$PCODE.y)
+all.equal(xy.ss.covar$PCODE.x, xy.ss.covar$PCODE.y)
+
+unique(xy.ss.covar[is.na(xy.ss.covar$PCODE.y),]$PCODE.x)
+unique(xy.ss.covar[is.na(xy.ss.covar$PCODE.x),]$PCODE.y)
+
+```
+
+**Remove QC Atlas and MB Atlas from covariates table, then redo merge and quality check**
+
+``` {r}
+ss.covar <- subset(ss.covar, ss.covar$PCODE %in% c("BCCA","EKTFL14", "LRM655", "KMART", "QDFA", "PGTSA", "TFL48VM", "BL2TFL48", "GMSMON15", "DCFBP"))
+```
+
+**Some Quality Checks*
+
+``` {r}
+xy.ss.covar$PCODE.x <- as.character(xy.ss.covar$PCODE.x)
+xy.ss.covar$PCODE.y <- as.character(xy.ss.covar$PCODE.y)
+all.equal(xy.ss.covar$PCODE.x, xy.ss.covar$PCODE.y)
+
+```
+
+**NOTES**
+
+* It appears that some SS from the following projects are missing covariates: `r unique(xy.ss.covar[is.na(xy.ss.covar$PCODE.y),]$PCODE.x)`
+* Some SS from `r unique(xy.ss.covar[is.na(xy.ss.covar$PCODE.x),]$PCODE.y)` are in the covariates file but not the XY/SS file in the COFI Access database. 
+
+##### Fix: Create new PCODE
+
+``` {r}
+xy.ss.covar$PCODE <- xy.ss.covar$PCODE.x
+xy.ss.covar$PCODE[is.na(xy.ss.covar$PCODE)] <- xy.ss.covar$PCODE.y[is.na(xy.ss.covar$PCODE)]
+unique(xy.ss.covar$PCODE)
+```
+
+**Checking for Missing Data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind,lapply(xy.ss.covar, function(x) {sum(is.na(x))}))), caption="Number of missing values per column")
+kable(as.data.frame(do.call(rbind,lapply(xy.ss.covar, function(x) {length(unique(x))}))), caption="Number unique values per column")
+nrow(xy.ss.covar)
+length(unique(xy.ss.covar$SS))
+```
+
+
+**Regnerate XY coordinates by extracting from both tables**
+``` {R}
+xy.ss.covar$X_coor <- xy.ss.covar$X
+xy.ss.covar$X_coor[!is.na(xy.ss.covar$POINT_X)] <- xy.ss.covar$POINT_X[!is.na(xy.ss.covar$POINT_X)]
+
+xy.ss.covar$Y_coor <- xy.ss.covar$Y
+xy.ss.covar$Y_coor[!is.na(xy.ss.covar$POINT_Y)] <- xy.ss.covar$POINT_Y[!is.na(xy.ss.covar$POINT_Y)]
+```
+
+
+``` {r}
+xy.ss.covar$Missing_Coordinates <- NA
+xy.ss.covar$Missing_Coordinates[!is.na(xy.ss.covar$X_coor)] <- "NOT missing Coordinates"
+unique(xy.ss.covar$Missing_Coordinates)
+```
+
+
+``` {r}
+xy.ss.covar$Missing_Covar <- NA
+xy.ss.covar$Missing_Covar[!is.na(xy.ss.covar$tree)] <- "NOT missing Covariates"
+unique(xy.ss.covar$Missing_Covar)
+
+```
+
+**Notes**
+
+* `r unique(xy.ss.covar[xy.ss.covar$Missing_Covar == "Missing Covariates",]$PCODE)` have SSs without covariates
+* ACTION: Long-term: Suggest Trish could look into datasets without covariates. 
+* ACTION: Short-term: Keep them for now but they'll be dropped at offset stage
+
+
+#### Subset for desired columns
+
+``` {r}
+colstokeep <- c("SS", "tree", "NALCMS05", "TZID", "FID_tz_wor", "X_coor", "Y_coor", "Missing_Coordinates", "Missing_Covar")
+xy.ss.covar <- xy.ss.covar[which(colnames(xy.ss.covar) %in% colstokeep)]
+```
+
+#### Cache, clean, and reload
+
+``` {r}
+cache("xy.ss.covar")
+rm(list=ls());gc()
+load("cache/xy.ss.covar.RData")
+```
+
+### 2. Sampling Occasions: *BC_COFI_PKEY.txt*
+The BAM Database is hierarchical, with primary keys for each table compounding upon each other in the various tables. 
+It's useful to look at a map to understand how the column names correspond to point count survey protocols/sampling design.  Kathy Martin's data represents a good example. 
+
+* _PCODE_: unique code for each project
+* _SITE_: Typically a cluster of point count stations
+* _STN_: individual point count survey location
+* _SS_: compound key comprised of PCODE:SITE:STN
+* _ROUND_: If multiple visits to the same location, typically on different days.
+* _PKEY_: compound key -->  PCODE:SITE:STN:YY:ROUND
+* _METHOD_: The survey method (survey distance, duration); usually but not always consistent within a PCODE.
+* _obs_: Identity of the survey observer.
+
+![ ^^^ Image. BBS, Atlas (BCCA), and KMART (Kathy Martin)'s data, as an example of PCODE, SITE, and STN. Different coloured dots are from different projects (PCODEs). Kathy Martin's data (KMART) has clusters of stations in different sites (SITE), which are labelled KNIFEAFF, KNIFE7M, etc. Within (SITE) clusters are individual stations (STN). The combination of PCODE:SITE:STN makes up SS, which is a  unique ID corresponding to a given location indicated by xy coordinates](../output/KathyMartinSITEdemo.jpg)
+
+``` {r load.pkey}
+pkey <- read.csv("data/BC_COFI_PKEY.txt")
+kable(rbind(head(pkey), tail(pkey)), row.names=F)
+unique(pkey$METHOD)
+```
+
+**Checking for Missing Data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind,lapply(pkey, function(x) {sum(is.na(x))}))), caption="Number of missing values per column")
+kable(as.data.frame(do.call(rbind,lapply(pkey, function(x) {length(unique(x))}))), caption="Number unique values per column")
+nrow(pkey)
+length(unique(pkey$PKEY))
+```
+
+``` {r}
+pkey$StartTime[pkey$StartTime == ""] <- NA #if start time is blank, make "NA"
+
+pkey$Missing_StartTime <- NA
+pkey$Missing_StartTime[!is.na(pkey$StartTime)] <- "NOT missing Sampling Date"
+
+pkey$Missing_HR_MIN <- NA
+pkey$Missing_HR_MIN[!(is.na(pkey$HR) & is.na(pkey$MIN))] <- "NOT missing Start Time"
+
+pkey$Missing_SamplingDate <- NA
+pkey$Missing_SamplingDate[!(is.na(pkey$MM) | is.na(pkey$DD))] <- "NOT missing Sampling Date"
+```
+
+**Some Checks**
+
+``` {r}
+unique(pkey[pkey$Missing_SamplingDate == "NOT missing Sampling Date",]$DD)
+unique(pkey[pkey$Missing_SamplingDate == "NOT missing Sampling Date",]$MM)
+```
+
+**ERROR NOTICED** - I'm pretty sure no surveys were done in Nov and Dec, so this probably indicates a switch in MM and DD for some sites. Time to track down which ones 
+
+``` {r}
+pkey$MM.old <- pkey$MM
+pkey$DD.old <- pkey$DD
+pkey <- pkey[order(pkey$YYYY, pkey$SS),]
+
+kable(rbind(head(pkey[pkey$PCODE %in% "GMSMON15", c("PCODE", "SS", "YYYY", "MM", "DD", "MM.old")], 10), tail(pkey[pkey$PCODE %in% "GMSMON15", c("PCODE", "SS", "YYYY", "MM", "DD", "MM.old")], 10)), row.names=F)
+
+pkey$DD[pkey$PCODE %in% "GMSMON15" & pkey$YYYY == "2012"] <- pkey$MM.old[pkey$PCODE %in% "GMSMON15" & pkey$YYYY == "2012"] 
+
+pkey$MM[pkey$PCODE %in% "GMSMON15" & pkey$YYYY == "2012"] <-
+  pkey$DD.old[pkey$PCODE %in% "GMSMON15" & pkey$YYYY == "2012"]
+
+kable(rbind(head(pkey[pkey$PCODE %in% "GMSMON15" & pkey$YYYY == "2012",c("PCODE", "SS", "YYYY", "MM", "DD")]),
+            tail(pkey[pkey$PCODE %in% "GMSMON15" & pkey$YYYY == "2012",c("PCODE", "SS", "YYYY", "MM", "DD")])), row.names=F)
+unique(pkey$MM)
+```
+
+Alright, so that fixed the obvious date issues. Let's look at some other potential data problems. 
+
+``` {r}
+pkey$DATE <- as.Date(paste(pkey$YYYY, pkey$MM, pkey$DD, sep="/"))
+```
+
+**Notes**
+
+* The pkey table has `r nrow(pkey)` rows covering `r length(unique(pkey$SS))` SS from `r length(unique(pkey$SITE))` sites over `r length(unique(pkey$PCODE))` projects. This corresponds to `r length(unique(pkey$PKEY))` unique PKEYS
+* The earliest point count was done in `r min(pkey$YYYY)`.
+* Sometimes the addition of WSI data added projects we already had from the Atlas. So we need to look for duplicated locations and years to remove those duplicates.
+
+#### Get method details (MaxDur, MaxDist, etc) from proj summary table and method code tables
+
+
+1. **National_Proj_Summary_V4_2015.csv**
+
+```{r, load.proj.summary}
+projs <- read.csv("data/National_Proj_Summary_V4_2015.csv", header=T)
+colnames(projs)[which(colnames(projs) == "Method")] <- "METHOD" #change colname
+projs$Maxdist <- toupper(projs$Maxdist)
+
+kable(head(projs[c("PCODE", "METHOD", "DURMETH", "DISTMETH", "ChangeMethod", "MaxDuration", "Maxdist")]), row.names=F)
+```
+
+**Checking for Missing Data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind,lapply(projs, function(x) {length(unique(x))}))), caption="Number unique values per column")
+
+kable(as.data.frame(do.call(rbind,lapply(projs, function(x) {sum(is.na(x))}))), caption="Number of missing values per column")
+
+nrow(projs)
+length(unique(projs$METHOD))
+length(unique(projs$PCODE))
+rm(projs)
+```
+
+**ERROR NOTICED** - Some of the new projects don't have max dist and max duration in their tables
+
+* Correction: I referred back to the Access database to update the project summary table accordingly
+* Now reload the project summary with manual correction
+
+``` {r}
+projs <- read.csv("data/qry_ProjMethodSummary-manuallyCorrected.csv", header=T)
+
+colnames(projs)[which(colnames(projs) == "Method")] <- "METHOD" #change colname
+projs.qs <- projs #quicksave
+projs$Maxdist <- toupper(projs$Maxdist)
+
+kable(head(projs[c("PCODE", "METHOD", "DURMETH", "DISTMETH", "MaxDuration", "Maxdist")]), row.names=F)
+```
+
+**Checking for Missing Data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind,lapply(projs, function(x) {length(unique(x))}))), caption="Number unique values per column")
+
+kable(as.data.frame(do.call(rbind,lapply(projs, function(x) {sum(is.na(x))}))), caption="Number of missing values per column")
+
+nrow(projs)
+length(unique(projs$METHOD))
+length(unique(projs$PCODE))
+```
+
+``` {r}
+pkey.method <- merge(pkey[c("PKEY", "SS", "PCODE", "SITE", "STN", "ROUND", "YYYY", "MM", "DD", "HR", "MIN","METHOD", "obs", colnames(pkey)[grep("Missing", colnames(pkey))])], 
+                     projs[c("METHOD", "DURMETH", "DURATIONRANGE", "MaxDuration", "DISTMETH", "DISTANCERANGE", "Maxdist")], by="METHOD", all.x=T) # keep all METHODs in the PKEY table, but discard any that are just in the methods table. 
+
+kable(as.data.frame(do.call(rbind,lapply(pkey.method, function(x) {sum(is.na(x))}))), caption="Number of missing values per column")
+
+pkey.method$Missing_Method <- NA
+pkey.method$Missing_Method[!is.na(pkey$METHOD)] <- "NOT missing Method"
+
+```
+
+#### Cache, clean, and reload
+
+``` {r}
+cache("pkey.method")
+rm(list=ls());gc()
+```
+
+``` {r}
+load("cache/xy.ss.covar.RData")
+nrow(xy.ss.covar)
+length(unique(xy.ss.covar$SS))
+colnames(xy.ss.covar)
+
+
+load("cache/pkey.method.RData")
+nrow(pkey.method)
+length(unique(pkey.method$SS))
+length(unique(pkey.method$PKEY))
+colnames(pkey.method)
+```
+
+
+### Combine xy.ss.covar and pkey.method tables
+
+``` {r}
+xy.ss.covar.pkey.method <- merge(xy.ss.covar, pkey.method, by="SS", all=T)
+colnames(xy.ss.covar.pkey.method)
+```
+
+**Check for missing data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind,lapply(xy.ss.covar.pkey.method, function(x) {sum(is.na(x))}))), caption="Number of missing values per column")
+```
+
+``` {r}
+xy.ss.covar.pkey.method$Missing_PKEY <- NA
+xy.ss.covar.pkey.method$Missing_PKEY[!(is.na(xy.ss.covar.pkey.method$PKEY))] <- "NOT missing PKEY"
+
+xy.ss.covar.pkey.method$PCODE_derived <- unlist(lapply(strsplit(as.character(xy.ss.covar.pkey.method$SS), ":"), function(x) {x[1]}))
+
+```
+
+### Create reduced set, cache, clean, and reload
+
+``` {r}
+cache("xy.ss.covar.pkey.method")
+write.table(xy.ss.covar.pkey.method, file="data/xy.ss.covar.pkey.method_all.csv", sep=",", col.names=T, row.names=F)
+
+do.call(rbind, lapply(xy.ss.covar.pkey.method, function(x) {sum(is.na(x))}))
+
+# remove any missing METHOD info (b/c precludes offset calculation)
+xy.ss.covar.pkey.method_nomissing <- subset(xy.ss.covar.pkey.method, subset=xy.ss.covar.pkey.method$Missing_Method %in% "NOT missing Method")
+do.call(rbind, lapply(xy.ss.covar.pkey.method_nomissing, function(x) {sum(is.na(x))}))
+
+xy.ss.covar.pkey.method_nomissing <- subset(xy.ss.covar.pkey.method_nomissing, subset=xy.ss.covar.pkey.method_nomissing$Missing_Covar %in% "NOT missing Covariates")
+do.call(rbind, lapply(xy.ss.covar.pkey.method_nomissing, function(x) {sum(is.na(x))}))
+
+xy.ss.covar.pkey.method_nomissing <- subset(xy.ss.covar.pkey.method_nomissing, subset=xy.ss.covar.pkey.method_nomissing$Missing_HR_MIN %in% "NOT missing Start Time")
+do.call(rbind, lapply(xy.ss.covar.pkey.method_nomissing, function(x) {sum(is.na(x))}))
+
+xy.ss.covar.pkey.method_nomissing <- xy.ss.covar.pkey.method_nomissing[-which(colnames(xy.ss.covar.pkey.method_nomissing) %in% c("Missing_StartTime"))]
+```
+
+``` {r}
+cache("xy.ss.covar.pkey.method_nomissing")
+rm(list=ls()); gc()
+load("cache/xy.ss.covar.pkey.method_nomissing.RData")
+```
+
+**NOTES**
+
+* Many SS have no PKEY, PCODE, and other information. Exact number is in table above. 
+
+## Next Step. Look for duplicates
+
+### Looking for Duplicates 1: initial exploration of duplicates by Location and Date
+
+``` {r, create.locYr}
+xy.ss.covar.pkey.method_nomissing$LocYr <- paste(xy.ss.covar.pkey.method_nomissing$X_coor, xy.ss.covar.pkey.method_nomissing$Y_coor, xy.ss.covar.pkey.method_nomissing$YYYY)
+kable(head(xy.ss.covar.pkey.method_nomissing[c("PCODE", "LocYr", "YYYY", "HR", "MIN")]), row.names=F)
+```
+
+`r length(unique(xy.ss.covar.pkey.method_nomissing$LocYr))` unique location & year combinations but in a data.farme of `r nrow(xy.ss.covar.pkey.method_nomissing)` rows. Indicating `r nrow(xy.ss.covar.pkey.method_nomissing) -length(unique(xy.ss.covar.pkey.method_nomissing$LocYr))` duplicated combinations of location and year.
+
+Let's look at some of these duplicates in more detail. 
+
+``` {r loc.yr.duplicates, eval=T}
+loc.yr.dups <- xy.ss.covar.pkey.method_nomissing$LocYr[duplicated(xy.ss.covar.pkey.method_nomissing$LocYr)] # which combos are duplicated?
+xy.ss.covar.pkey.method.dups <- xy.ss.covar.pkey.method_nomissing[xy.ss.covar.pkey.method_nomissing$LocYr %in% loc.yr.dups,] #subset for duplicated combos
+xy.ss.covar.pkey.method.dups <- xy.ss.covar.pkey.method.dups[order(xy.ss.covar.pkey.method.dups$LocYr),] #change order
+write.table(xy.ss.covar.pkey.method.dups, file="output/duplicates.xyYear.csv", sep=",", col.names=T, row.names=F) #archive to computer
+kable(xy.ss.covar.pkey.method.dups[1:20,c("LocYr", "STN", "HR", "MIN", "obs")], row.names=F) #preview
+```
+
+Thoughts on the above table: 
+
+* Some "duplicate" surveys start at different times and correspond to different STNs. This suggests that they are different stations, even though they have "identical" xy coordinates. Perhaps the precision on the XY coordinates isn't sufficient to distinguish separate points. 
+
+![ ^^^ Image. Example for SS BCCA:11PQ75:310765 and BCCA:11PQ75:310765, where bird data are different, confirming two different surveys... though possibly unindicated rounds](../output/ExampleDataDuplication2.jpg)
+
+* Subsequent examination of a specific known duplicate set (Atlas BCCA and QDFA) confirms that coordinates for some datasets have been rounded to fewer decimal places than were originally included. This would have the opposite effect of appearing to be NOT duplicated when in reality they are.
+    * Short-term ACTION: Round XY coordinates to 6 digits so that I detect duplication between less and more precise datasets.
+    * Longer-term ACTION: Ask Trish if Atlas has more precise coordinates stashed somewhere.
+
+![ ^^^ Image. Example for of the exact same stations being included from two different sources (BCCA and QDFA). Survey information is identical other than XY. BCCA has lower precision on XY coordinates than does QDFA.](../output/ExampleDataDuplication3.jpg)
+
+* In conclusion, the current LocYr combination is not a sufficient indicator for identifying duplicates
+    * Short-term ACTION: Include date, start time, and observer in my calculation of duplicates
+    * Longer-term ACTION: Trish can inspect apparent duplicates and delete real duplications. 
+
+##### Removing Duplicates 2: Adding Time and Observer into the calculation
+
+``` {r Loc.Date.Time.Duplicates, eval=T}
+xy.ss.covar.pkey.method_nomissing$LocDateTime <- paste(round(xy.ss.covar.pkey.method_nomissing$X_coor, 6), round(xy.ss.covar.pkey.method_nomissing$Y_coor,6), xy.ss.covar.pkey.method_nomissing$DATE, xy.ss.covar.pkey.method_nomissing$HR, xy.ss.covar.pkey.method_nomissing$MIN)
+
+xy.ss.covar.pkey.method_nomissing$LocDateTimeObs <- paste(round(xy.ss.covar.pkey.method_nomissing$X_coor, 6), round(xy.ss.covar.pkey.method_nomissing$Y_coor,6), xy.ss.covar.pkey.method_nomissing$DATE, xy.ss.covar.pkey.method_nomissing$HR, xy.ss.covar.pkey.method_nomissing$MIN, xy.ss.covar.pkey.method_nomissing$obs)
+
+xy.ss.covar.pkey.method_nomissing <- xy.ss.covar.pkey.method_nomissing[order(xy.ss.covar.pkey.method_nomissing$LocDateTimeObs),]
+```
+
+**Notes** 
+
+* `r length(unique(xy.ss.covar.pkey.method_nomissing$LocDateTime))` unique location, date, and time combinations but in a data.farme of `r nrow(xy.ss.covar.pkey.method_nomissing)` rows. Indicating many fewer, but still `r nrow(xy.ss.covar.pkey.method_nomissing)- length(unique(xy.ss.covar.pkey.method_nomissing$LocDateTime))`, duplicates. 
+* But... there's a difference between those containing StartTime and those containing StartTime AND observer: `r length(unique(xy.ss.covar.pkey.method_nomissing$LocDateTimeObs))` unique combinations of location, date, time, and observer, `r length(unique(xy.ss.covar.pkey.method_nomissing$LocDateTimeObs))- length(unique(xy.ss.covar.pkey.method_nomissing$LocDateTime))` more than just combining location, date, and time.
+    * ACTION: Before I delete them, I should check if they're genuine double-observer surveys.
+
+##### Removing Duplicates 3: Looking for double-observer surveys
+
+Look for duplicated combinations of locdatetime that are NOT in the locdatetimeobs table
+
+``` {r look.for.double.observers, eval=T}
+locdatetimedups <- xy.ss.covar.pkey.method_nomissing$LocDateTime[duplicated(xy.ss.covar.pkey.method_nomissing$LocDateTime)] #duplicated combos
+locdatetimeobsdups <- xy.ss.covar.pkey.method_nomissing$LocDateTimeObs[duplicated(xy.ss.covar.pkey.method_nomissing$LocDateTimeObs)] # duplicated combos
+xy.ss.covar.pkey.method_nomissing.locdatetimedups <- xy.ss.covar.pkey.method_nomissing[xy.ss.covar.pkey.method_nomissing$LocDateTime %in% locdatetimedups,] #df of duplicated combos
+xy.ss.covar.pkey.method_nomissing.locdatetimeobsdups <- xy.ss.covar.pkey.method_nomissing[xy.ss.covar.pkey.method_nomissing$LocDateTimeObs %in% locdatetimeobsdups,] #df of duplicated combos
+
+possible.double.observers <- xy.ss.covar.pkey.method_nomissing.locdatetimedups[!xy.ss.covar.pkey.method_nomissing.locdatetimedups$LocDateTime %in% xy.ss.covar.pkey.method_nomissing.locdatetimeobsdups$LocDateTime, c("PCODE", "STN", "ROUND", "YYYY", "MM", "DD", "HR", "MIN", "obs", "LocDateTimeObs")] #subset of combos where observer is only difference between apparently duplicated sites
+possible.double.observers <- possible.double.observers[order(possible.double.observers$PCODE, possible.double.observers$YYYY, possible.double.observers$HR),] #change order
+write.table(possible.double.observers, file="output/duplicates.possibledoubleobservers.csv", sep=",", col.names=T, row.names=F) #archive on computer
+kable(possible.double.observers[c(1:10, 20:25, 200:210, 230), c("PCODE", "STN", "ROUND", "YYYY", "MM", "DD", "HR", "MIN", "obs")]) #preview
+```
+
+**Notes**
+
+It's a small set, so I inspected them all manually in Excel and in Access. I came to the following conclusions: 
+
+* Only one survey appears to be true double-observer surveys: KMART:RISKESD has observers LMT and KD, who observed similar but not identical bird lists. ACTION: Keep these ones. 
+  
+* Some appear to be duplicated datasets... giving the impression of two different observers because they're numbers in BCCA but names in the original project. e.g., 
+    * BCCA10FG08 and BL2TFL48 in 2008. Atlas observer 970 is probably Kelly Squire. 
+    * BCCA and QDFA in 2008 and 2009. 
+        * Atlas observer 82 = Chris Chutter; 
+        * Observer 1263 = Christine Rothenbach; 
+        * Observer 467 = James Bradley; 
+        * Observer 1367 = Kate England. 
+    * ACTION: Delete the ATLAS versions of these but keep the project specific ones. 
+
+* And still others are inexplicably weird. Pairs of apparently different observers conducting a survey at the same location and time, but with very different species lists. 
+    * BCCA:10DU79 and BCCA:10DU89 appear to have two observers: one unidentified and one 99 or 100. Inspecting the Access Database suggests that this is NOT double-observer (see below screencap). I wonder if somehow the same observer collected all the data at this station, but didn't fill in all the rows with the observer ID. This led to splitting the survey into two parts? ACTION: DELETE these sites
+
+![ ^^^ Image. Example BCCA:10DU79 and BCCA:10DU89 on Jun 5, 2009 and Jun 17, 2009](../output/ExampleDataDuplication4.jpg)
+
+  * BCCA:10FE54 has observers 120 and 965. Similar situation as above where observer  120 has a much bigger species list than does observer 965. ACTION: Delete observer 965 but keep 120. 
+
+![ ^^^ Image. Example BCCA:10FE54](../output/ExampleDataDuplication5.jpg)
+
+**ACTIONS**
+
+* I created an Excel file summarizing the verdict on this specific subset of duplicates: ** duplicates.possibledoubleobservers-deleteVerdict.csv.** Use this to remove undesired sites/surveys. 
+
+``` {r remove.unwanted.set1, eval=T}
+removeverdict <- read.csv("output/duplicates.possibledoubleobservers-deleteVerdict.csv", header=T)
+LocDateTimeObs.todelete <- unique(removeverdict$LocDateTimeObs) #which combos to delete
+xy.ss.covar.pkey.method_nomissing.qs <- xy.ss.covar.pkey.method_nomissing #create quick.save version of df.
+xy.ss.covar.pkey.method_nomissing <- xy.ss.covar.pkey.method_nomissing[!xy.ss.covar.pkey.method_nomissing$LocDateTimeObs %in% LocDateTimeObs.todelete,] #subsetting for not the bad combos
+```
+
+##### Removing Duplicates 4: Returning to regular duplicates (LocationDateTimeObserver)
+
+Now that I've taken care of surveys that _appeared_ to be double-observer (b/c different observers for all other identical survey info), I can focus on examining the duplicates for Location, Date, Time, and Observer. 
+
+``` {r}
+write.table(xy.ss.covar.pkey.method_nomissing.locdatetimeobsdups, file="output/duplicates.LocYearTimeObs.csv", sep=",", col.names=T, row.names=F) #archive to computer
+xy.ss.covar.pkey.method_nomissing.locdatetimeobsdups <- xy.ss.covar.pkey.method_nomissing.locdatetimeobsdups[order(xy.ss.covar.pkey.method_nomissing.locdatetimeobsdups$PCODE, xy.ss.covar.pkey.method_nomissing.locdatetimeobsdups$YYYY, xy.ss.covar.pkey.method_nomissing.locdatetimeobsdups$MM, xy.ss.covar.pkey.method_nomissing.locdatetimeobsdups$DD),]
+
+kable(rbind(head(xy.ss.covar.pkey.method_nomissing.locdatetimeobsdups[c("PCODE", "STN", "ROUND", "YYYY", "MM", "DD", "HR", "MIN", "obs")], 10), tail(xy.ss.covar.pkey.method_nomissing.locdatetimeobsdups[c("PCODE", "STN", "ROUND", "YYYY", "MM", "DD", "HR", "MIN", "obs")], 10)))
+kable(xy.ss.covar.pkey.method_nomissing.locdatetimeobsdups[c(1:25, (nrow(xy.ss.covar.pkey.method_nomissing.locdatetimeobsdups)-25):nrow(xy.ss.covar.pkey.method_nomissing.locdatetimeobsdups)), c("PCODE", "STN", "ROUND", "YYYY", "MM", "DD", "HR", "MIN", "obs")], row.names=F, caption="First 25 rows and Last 25 rows")
+```
+
+**Notes**
+
+Investigating on a case by case basis. 
+
+* SRDR.M68_3: There's a STN 8 and a STN 9 at the exact same coordinates, surveyed at the exact same time. But with different species lists. ACTION: Keep both for now. 
+* KMART:KNIFEKN: B2: looks like it might be a typo extra space in the SS/STN. Results in different bird data, but I think maybe it's supposed to be for the same site.       
+    * ACTION: I changed the SS and STN name in the hopes that it would fix the problem, but it probably won't. I may need to remove this STN from the dataset. 
+* BCCA: In some of the pairs I checked, the surveys are at the same location, started at the same time, and done by the same observer. They have similar but not identical bird list.
+
+![ ^^^ Image. Example BCCA:08MM11 at 6:37 am by observer 117. Entry 1 has FOSP while Entry 2 doesn't; Entry 2 has SAVS and WCSP while Entry 1 doesn't](../output/ExampleDataDuplication6.jpg)
+
+* But in other pairs, everything is identical (location, date, time, observer, AND bird list). I suggest there are errors somewhere, but I can't figure out where.
+
+![ ^^^ Image. Example for SS BCCA:11NS17:333027 and BCCA:11NS17:333029, suggesting complete duplication of data](../output/ExampleDataDuplication1.jpg)
+
+![ ^^^ Image. Example for BCCA:10CE80, suggesting complete duplication of data](../output/ExampleDataDuplication7.jpg)
+
+* Short-term ACTION: Delete these from the dataset in the interest of saving time. 
+* Long-term ACTION: Take this list to Trish for more exploration. 
+
+
+``` {r delete.latest.duplicates, eval=T}
+xy.ss.covar.pkey.method_nomissing.qs <- xy.ss.covar.pkey.method_nomissing #quicksave
+xy.ss.covar.pkey.method_nomissing <- xy.ss.covar.pkey.method_nomissing[!xy.ss.covar.pkey.method_nomissing$LocDateTimeObs %in% xy.ss.covar.pkey.method_nomissing.locdatetimeobsdups$LocDateTimeObs,]
+```
+
+After that, I hope there aren't any duplicates left based on sampling location (SS) and sampling instance (PKEY) 
+
+# However, I probably need to do some more quality-checking after keeping more stations than I did the first time around. There are some PCODES here I don't recognize from the first time. 
+
+
+## 3. Point Count Data (i.e., bird observations): *BC_COFI_POINTCOUNT.txt* 
+
+**FILES**
+
+1. **BC_COFI_POINTCOUNT.csv**
+
+``` {r load.pcdat, eval=T}
+#load point count data
+pcdat1 <- read.csv("data/BC_COFI_POINTCOUNT.txt")
+colnames(pcdat1)[which(colnames(pcdat1)=="SumOfABUND")] <- "ABUND"
+pcdat1 <- pcdat1[c("PKEY", "DURATION", "DISTANCE", "SPECIES", "BEH", "ABUND")]
+
+# load species codes/names
+#codes <- read.csv("data/EC_AVIAN_CORE_20131015.csv") # OLDER species list
+codes <- read.csv("data/EC_AVIAN_CORE_20150324.csv")
+colnames(codes)[which(colnames(codes)=="Species_ID")] <- "SPECIES"
+
+#merge species names into point count dataset
+pcdat2 <- merge(pcdat1, codes, by="SPECIES", all.x=T)
+
+#subset for necessary columns
+pcdat <- pcdat2[c(colnames(pcdat1), "English_Name")]
+pcdat <- pcdat[order(pcdat$PKEY),]
+
+kable(rbind(head(pcdat), tail(pcdat)), row.names=F, caption="First 6 and last 6 rows")
+```
+
+##### Looking for duplicated bird observations
+
+
+``` {r melt.pc.dat, eval=T}
+pcdat_melt <- melt(pcdat[c("PKEY", "SPECIES", "DURATION", "DISTANCE", "ABUND", "BEH")], measure.vars="ABUND") # bring dataset into molten form
+```
+
+Let's look for duplicates here... Combine PKEY, Species, Duration, Distance, and Behaviour to create a unique ID.
+ 
+``` {r look.for.duplicates}
+pcdat_melt$PkeySpDurDisBeh <- paste(pcdat_melt$PKEY, pcdat_melt$SPECIES, pcdat_melt$DURATION, pcdat_melt$DISTANCE, pcdat_melt$BEH, sep=".")
+```
+
+`r length(unique(pcdat_melt$PkeySpDurDisBeh))` unique combinations of PKEY, SPECIES, DURATION, DISTANCE, AND BEHAVIOUR but `r nrow(pcdat_melt)` rows. suggesting `r nrow(pcdat_melt) - length(unique(pcdat_melt$PkeySpDurDisBeh))` duplicates
+
+NO DUPLICATES. 
+
+``` {r finding.UNGU.related.duplicates, eval=F}
+dupcombos <- unique(pcdat_melt[duplicated(pcdat_melt$PkeySpDurDisBeh),]$PkeySpDurDisBeh)
+kable(data.frame(PkeySpDurDistBeh=dupcombos))
+pcdat_melt_tmp <- pcdat_melt[pcdat_melt$PkeySpDurDisBeh %in% dupcombos,]
+kable(pcdat_melt_tmp, row.names=F)
+kable(head(pcdat[pcdat$SPECIES %in% "UNGU",]), row.names=F)
+codes[duplicated(codes$SPECIES),] #finding that duplicated species code...
+# All of these duplicates involve the same Species code (UNGU) -- the duplicates are from when I merged in the English names!! So I went back and updated my species code list to the 2015 version and now there's no duplicates. 
+```
+
+#### Combine PC dat with xy.ss.covar.pkey.method_nomissing and write to a file for future use
+
+##### First, check which PKEY have no bird data, and which bird data have no associated spatial data
+
+``` {r}
+datformerging <- xy.ss.covar.pkey.method_nomissing[-which(colnames(xy.ss.covar.pkey.method_nomissing) %in% c("FID_tz_wor", "Missing_Coordinates", "Missing_Covar", "Missing_HR_MIN", "Missing_SamplingDate", "Missing_Method", "Missing_PKEY", "PCODE_derived", "LocYr", "LocDateTime", "LocDateTimeObs"))]
+```
+
+``` {r}
+xy.ss.covar.pkey.method_nomissing.pc1 <- merge(datformerging, pcdat, by="PKEY", all.x =T) # merge with all pkey in the xy or pkey table, regardless of presence of bird data
+
+kable(rbind(head(xy.ss.covar.pkey.method_nomissing.pc1[is.na(xy.ss.covar.pkey.method_nomissing.pc1$ABUND),]),
+            tail(xy.ss.covar.pkey.method_nomissing.pc1[is.na(xy.ss.covar.pkey.method_nomissing.pc1$ABUND),])))
+
+``` 
+
+**Check for Missing Data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind,lapply(xy.ss.covar.pkey.method_nomissing.pc1, function(x) {sum(is.na(x))})))) # check for missing data
+```
+
+`r length(xy.ss.covar.pkey.method_nomissing.pc1[is.na(xy.ss.covar.pkey.method_nomissing.pc1$ABUND),]$PKEY)` unique PKEYs have no bird data associated with them. In PCODEs: `r unique(xy.ss.covar.pkey.method_nomissing.pc1[is.na(xy.ss.covar.pkey.method_nomissing.pc1$ABUND),]$PCODE)`
+
+``` {r}
+xy.ss.covar.pkey.method_nomissing.pc2 <- merge(datformerging, pcdat, by="PKEY", all.y =T) # merge with all abund data, regardless of presence in xy or pkey tables
+
+kable(rbind(head(xy.ss.covar.pkey.method_nomissing.pc2[is.na(xy.ss.covar.pkey.method_nomissing.pc2$PCODE),]),
+            tail(xy.ss.covar.pkey.method_nomissing.pc2[is.na(xy.ss.covar.pkey.method_nomissing.pc2$PCODE),])))
+
+``` 
+
+**Check for Missing Data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind, lapply(xy.ss.covar.pkey.method_nomissing.pc2, function(x) {sum(is.na(x))})))) # check for missing data
+```
+
+`r length(unique(xy.ss.covar.pkey.method_nomissing.pc2[is.na(xy.ss.covar.pkey.method_nomissing.pc2$PCODE),]$PKEY))` unique PKEYs have bird data, but are missing some element from survey method such as spatial location, date, etc. In PCODEs: `r unique(xy.ss.covar.pkey.method_nomissing.pc2[is.na(xy.ss.covar.pkey.method_nomissing.pc2$PCODE),]$PCODE)`
+
+``` {r}
+xy.ss.covar.pkey.method_nomissing.pc3 <- merge(datformerging, pcdat, by="PKEY", all =T) # keeps all pkeys even if missing some data
+``` 
+
+**Check for Missing Data**
+
+``` {r}
+
+kable(as.data.frame(do.call(rbind,lapply(xy.ss.covar.pkey.method_nomissing.pc3, function(x) {sum(is.na(x))})))) # check for missing data
+```
+
+``` {r}
+xy.ss.covar.pkey.method_nomissing.pc4 <- merge(datformerging, pcdat, by="PKEY") # merge only where we have all data
+
+head(xy.ss.covar.pkey.method_nomissing.pc4[is.na(xy.ss.covar.pkey.method_nomissing.pc4$ABUND),])
+
+``` 
+
+**Check for Missing Data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind,lapply(xy.ss.covar.pkey.method_nomissing.pc4, function(x) {sum(is.na(x))})))) # check for missing data
+```
+
+In omitting PKEYs where we're missing some data (either bird data or survey / methodological information), we omit `r length(unique(xy.ss.covar.pkey.method_nomissing.pc3$PKEY)) - length(unique(xy.ss.covar.pkey.method_nomissing.pc4$PKEY))` PKEYs. 
+
+##### Decide which table to use in future analyses
+
+``` {r}
+xy.ss.covar.pkey.method_nomissing.pc.use <- xy.ss.covar.pkey.method_nomissing.pc3
+```
+
+
+##### Write the table for later
+
+``` {r}
+write.table(xy.ss.covar.pkey.method_nomissing.pc.use, file="data/birddata_preprocess1.csv", sep=",", row.names=F, col.names=T)
+```
+
+
+## Check for Systematic Differences Among Surveys
+
+BC Models are to be built for all species, not individual species. Peter explored the possibility of a Total Bird offset, which corrects for survey methodlogy and detectability in general, but not individual species detectability. When my preliminary results didn't follow expected patterns in bird response to forest age and height, we started to wonder if the total offset is obscuring some of those patterns. 
+
+Peter suggested scaling all point counts to the same time/distance and then running analyses without a correction factor offset. This will be challenging if I want to include BBS data, which are unlimited distance surveys. 
+
+First thing to check... whether species means differ by survey method. 
+
+#### Which surveys use the same methods?
+
+* Survey method is indicated at the PKEY level
+    * Merge PKEY table with point count data to link method to data from individual point counts
+    * Merge resultant table with method legend so I know the distance and duration methods used. 
+    * Calculate means and counts of surveys per method
+    
+If there are systematic differences in mean abundance, I can't simiply lump all data together in one analysis because variation caused by methods will cause non-random spatial biases in abundances. 
+
+``` {r merged.xy.ss.covar.pkey.method_nomissing.pc, eval=T}
+xy.ss.covar.pkey.method_nomissing.pc <- xy.ss.covar.pkey.method_nomissing.pc.use
+colnames(xy.ss.covar.pkey.method_nomissing.pc)[which(colnames(xy.ss.covar.pkey.method_nomissing.pc) == "PCODE_derived")] <- "PCODE"
+```
+
+Filter for those that don't have method
+
+```{r}
+xy.ss.covar.pkey.method_nomissing.pc <- xy.ss.covar.pkey.method_nomissing.pc[!is.na(xy.ss.covar.pkey.method_nomissing.pc$METHOD),]
+```
+
+
+Create unique ID for combination of duration and distance method
+
+``` {r}
+xy.ss.covar.pkey.method_nomissing.pc$DurDisKey <- paste(xy.ss.covar.pkey.method_nomissing.pc$DURMETH, xy.ss.covar.pkey.method_nomissing.pc$DISTMETH, sep=".")
+```
+
+#### Compare bird counts among different survey types
+
+`r length(unique(xy.ss.covar.pkey.method_nomissing.pc$DurDisKey))` different combinations of methods used, across `r length(unique(xy.ss.covar.pkey.method_nomissing.pc$PCODE))` different projects.
+
+Subset to round1 and behaviour = 6 only
+
+``` {r}
+xy.ss.covar.pkey.method_nomissing.pc.round1 <- xy.ss.covar.pkey.method_nomissing.pc[xy.ss.covar.pkey.method_nomissing.pc$ROUND == 1 & xy.ss.covar.pkey.method_nomissing.pc$BEH == 6,]
+```
+
+Aggregate to "total bird" count per survey instance
+
+``` {r aggregate, eval=T}
+pkey.sumabund <- aggregate(xy.ss.covar.pkey.method_nomissing.pc.round1$ABUND,  by=list(PKEY=xy.ss.covar.pkey.method_nomissing.pc.round1$PKEY), FUN=sum)
+colnames(pkey.sumabund)[2] <- "sumABUND"
+```
+
+Merge with original dataset to get details of methods
+
+``` {r reattribute.method}
+pkey.method <- xy.ss.covar.pkey.method_nomissing.pc.round1[c("PKEY", "DISTMETH", "DURMETH", "METHOD", "MaxDuration", "Maxdist", "DurDisKey")]
+pkey.method <- pkey.method[!duplicated(pkey.method),]
+
+pkey.sumabund <- merge(pkey.sumabund, pkey.method, by="PKEY")
+```
+
+Calculate mean abundance by method
+
+``` {r compare.bird.means.by.method, eval=T}
+method.means <- aggregate(pkey.sumabund$sumABUND, by=list(DurDisKey=pkey.sumabund$DurDisKey), FUN=mean) # abundance per unique method
+colnames(method.means)[2] <- "MeanAbund"
+
+method.counts <- aggregate(pkey.sumabund$sumABUND, by=list(DurDisKey=pkey.sumabund$DurDisKey), FUN=length) # number of PKEYs (i.e. survey occasions) per unique method. 
+colnames(method.counts)[2] <- "CountSurveys"
+
+# Create a key for all methods represented in the BC dataset
+durcodes <- read.csv("data/DD_duration_codes_methodology.csv", header=T)
+discodes <- read.csv("data/DD_distance_codes_methodology.csv", header=T)
+colnames(durcodes)[2] <- "DURMETH"
+colnames(discodes)[1] <- "DISTMETH"
+method.lookup <- pkey.method[c("DISTMETH", "DURMETH", "DurDisKey", "MaxDuration", "Maxdist")]
+method.lookup <- method.lookup[!duplicated(method.lookup),]
+method.lookup <- merge(method.lookup, durcodes, by="DURMETH", all.x=T)
+method.lookup <- merge(method.lookup, discodes, by="DISTMETH", all.x=T)
+
+method.means <- merge(method.means, method.lookup[c("DurDisKey", "DISTMETH", "DURMETH", "MaxDuration", "Maxdist", "DURATIONRANGE", "DISTANCERANGE")], by="DurDisKey")
+method.stats <- merge(method.means, method.counts, by="DurDisKey")
+
+method.stats <- method.stats[order(method.stats$MaxDuration, method.stats$Maxdist), c("DurDisKey", "DURMETH","DISTMETH", "MaxDuration", "Maxdist", "DURATIONRANGE", "DISTANCERANGE", "CountSurveys", "MeanAbund")]
+
+kable(method.stats, row.names=F)
+```
+
+## Conclusions
+
+* Yup there are systematic differences among surveys / methods, so I can't simply lump everything in a single analysis. 
+* I met with Peter Solymos on Dec 11 to discuss, and we came up with the following plans: 
+    * Peter thinks his total bird offset still makes sense. It corrects for survey method and for effects of time of year and of day on detectability... just not for species-specific EDR and singing rate, for example. 
+    * If I want an alternative I could do the following: 
+        * Use survey method as correction FACTORs in model, based on max duration and max distance
+            * 3 levels for duration: max duration is 3, 5/6, or 8/10
+            * 3 levels for distance: max distance is 50, 80/100, and 150/unlimited
+        * Response variable is total abundance per PKEY (don't try to subset based on survey interval or band)
+        * These two factors are additive, not interactive
+        * Could include PCODE in addition to the above... to see if there are effects of Project independent of method
+
+## Next Steps
+
+* Clean up VRI data
+

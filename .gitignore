@@ -68,6 +68,8 @@ Temporary Items
 *.mxd
 .mxd
 
+## Output files
+.png
 
 ## Folders with Data
 data
@@ -76,3 +78,5 @@ output
 /output
 data/
 output/
+
+*.png

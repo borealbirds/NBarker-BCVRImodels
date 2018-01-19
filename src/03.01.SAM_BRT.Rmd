@@ -1,0 +1,227 @@
+---
+title: "Bird Abundance Model (For Prediction)" 
+author: "Nicole Barker"
+date: "Last run: Jan 9, 2018"
+output: 
+  word_document:
+    reference_docx: ../styles/ReportFormat_1.docx
+---
+
+##Script Abstract
+
+
+
+## Goal: Build a BRT model that will predict density as a function of VRI attributes, so I can fill in predicted bird density across the BC interior 
+
+
+
+**Steps **
+
+1. Load data (Canfor + Forsite)
+2. Set training and testing datasets
+3. Run BRT with full possible set of covariates
+4. Simplify BRT to reduce covariates
+5. Generate predictions from BRT
+6. In another script .... explore how to convert density to scores and generate my own rank matrix. 
+
+
+``` {r setup, echo=F, message=F, warning=F}
+require(knitr)
+opts_knit$set(root.dir = '..')
+knitr::opts_chunk$set(
+  fig.path = "figures/"
+)
+```
+
+``` {r load.project, message=F}
+require(ProjectTemplate)
+load.project()
+options(digits=12)
+```
+
+## 1. Load data (Canfor + Forsite)
+
+``` {r}
+load("cache/bird_vri_dat_ready.RData")
+colnames(bird_vri_dat_ready)
+unique(bird_vri_dat_ready$VRI_Layer)
+tota <- bird_vri_dat_ready
+
+colnames(tota)[which(colnames(tota) == "SS_derived")] <- "SS" # I derived SS from PKEY in a previous file. Here I rename it to SS
+colnames(tota)[which(colnames(tota) == "PCODE_derived")] <- "PCODE" # I derived PCODE from PKEY in a previous file. Here I rename it to PCODE
+
+```
+
+### Pick which offset to use
+
+``` {r}
+offset_use <- "offset_simple"
+#offset_use <- "OFFSET"
+```
+
+### Filter to include only one survey per sampling location (SS)
+
+A rigorous approach would involve repeating model building with multiple random sub-samples. However, in the interest of speed, I'm going to extract a single year of data from each SS that has multiple years of data. 
+
+I'll choose the specific year based on its proximity to the VRI reference year. This is just a matter of sorting based on (difference between reference year and bird survey year) and keeping the first one. 
+
+``` {r}
+tota <- tota[order(tota$SS, tota$Difference_Bird_Photo),]
+
+dupSS <- tota$SS[duplicated(tota$SS)] # the duplicated SSs
+
+tota.nodup <- tota[!tota$SS %in% dupSS,]
+tota.dupl <- tota[tota$SS %in% dupSS,]
+rm(tota)
+
+kable(digits=3, tota.dupl[1:25,c("SS", "PKEY", "Difference_Bird_Photo", "Age")])
+
+tota.dupl <- tota.dupl[!duplicated(tota.dupl$SS),] # cuts out all subsequently duplicated rows while keeping the first for each SS
+
+tota <- rbind(tota.nodup, tota.dupl)
+colnames(tota)[which(colnames(tota) == "sumABUND")] <- "Count"
+```
+
+**NOTES**
+
+* This keeps a total of `r length(unique(tota$SS))` locations, each with `r length(unique(tota$PKEY)) / length(unique(tota$SS))` PKEY. (should be 1. I haven't removed all duplicates if this number is > 1)
+
+## 2. Set training and testing datasets
+
+How many random model replicates (bootstraps) do I want to run? 
+
+``` {r}
+boots <- 2
+```
+
+``` {r}
+SS <- tota$SS
+N <- length(SS)
+trnsz <- round(N * 0.7)  # Size of the training dataset in # segs
+randomsets_tota <- lapply(1:boots, function(i) {
+  trndat <- sample(SS, trnsz, replace=F)  # the training datasets
+  tstdat <- SS[! SS %in% trndat]
+  md.out <- list(train=trndat, test=tstdat)  
+  })
+
+names(randomsets_tota) <- paste("Model", c(1:boots), "data", sep=".")
+
+cache("randomsets_tota")
+```
+
+
+## 3. Run BRT with full possible set of covariates
+
+### Set BRT parameters
+
+``` {r}
+  tc = 4            # tree complexity 
+  bf = 0.5          # bag fraction
+  lr = 0.007
+  kable(data.frame(BRT.Parameters=rbind(tc, bf, lr)))
+```
+
+### Specify predictor variables
+
+``` {r}
+pred.variables <- c("BEC_ZONE_CODE", "PROJ_AGE_1", "PROJ_HEIGHT_1", "SPECIES_CD_1", "SPECIES_CD_2", "SPECIES_PCT_1", "SPECIES_PCT_2", "BEC_SUBZONE", "CROWN_CLOSURE", "DistYear_Log", "DistYear_Nonlog") # mark points out that i might want to do years since disturbance.
+
+tota$DistYear_Log <- as.numeric(tota$DistYear_Log)
+tota$DistYear_Nonlog <- as.numeric(tota$DistYear_Nonlog)
+```
+
+### Load previous results if already run
+
+``` {r}
+  if("outboot_tota.RData" %in% dir("../cache") == T) {
+    load("cache/outboot_tota.RData")
+  }
+```
+
+### Run model if not previously run
+
+``` {r}
+if(!exists("outboot_tota")) {
+outboot_tota <- lapply(1:boots, function(i) {
+  run.brt.presample(dat=tota,
+                    samples=randomsets_tota[[i]],
+                    predictors= pred.variables,
+                    measure="Count", 
+                    offset=offset_use,
+                    tc=tc, bf=bf, lr=lr) #end one BRT
+}) #end all BRT boots
+
+cache("outboot_tota")
+}
+```
+  
+### summarize results
+
+``` {r, Fig.BRT_output, fig.height=11, fig.width=8.5, dpi=150}
+lapply(outboot_tota, function(x) {
+  summary(x[["brt"]])
+  })
+
+lapply(outboot_tota, function(x) {
+  gbm.plot(x[["brt"]], n.plots=6, plot.layout=c(3,2))
+  })
+
+```
+  
+## 4. Simplify BRT to reduce covariates
+
+
+
+## 5. Generate predictions from BRT
+
+### Load previous predictions if already run
+
+``` {r}
+  
+  
+```
+
+### Run Prediction Function if not already run
+
+#### Load full VRI dataset (not just intersected with birds)
+
+``` {r eval=F}
+load("cache/vri_both.RData")
+pred.dat <- vri_both[which(colnames(vri_both) %in% c("ID.Layer.Polygon", pred.variables))]
+length(unique(pred.dat$ID.Layer.Polygon))
+nrow(pred.dat)
+
+```
+
+
+
+``` {r eval=F}
+i=1
+pred_brt_1 <- predict.brt(tmp.brt=outboot_tota[[i]][["brt"]],
+                             pred.dat=pred.dat,
+                          id.col="ID.Layer.Polygon")
+cache("pred_brt_1")
+preds_for_mapping <- pred_brt_1$fullpreds
+preds_for_mapping$Layer <- unlist(lapply(strsplit(preds_for_mapping$ID.Layer.Polygon, ".", fixed=T), function(x) {x[1]}))
+preds_for_mapping$PolygonID <- unlist(lapply(strsplit(preds_for_mapping$ID.Layer.Polygon, ".", fixed=T), function(x) {x[2]}))
+
+preds_for_mapping_canfor <- subset(preds_for_mapping, subset=preds_for_mapping$Layer == "Canfor_TFL")
+preds_for_mapping_forsite <- subset(preds_for_mapping, subset=preds_for_mapping$Layer == "Forsite_VRI")
+
+colnames(preds_for_mapping_canfor)[which(colnames(preds_for_mapping_canfor) == "PolygonID")] <- "OBJECTID"
+colnames(preds_for_mapping_forsite)[which(colnames(preds_for_mapping_forsite) == "PolygonID")] <- "FEATURE_ID"
+
+write.table(preds_for_mapping_canfor[c("OBJECTID", "preds")], file="output/predsCanfor_2018.01.09.csv", sep=",", row.names=F, col.names=T)
+write.table(preds_for_mapping_forsite[c("FEATURE_ID", "preds")], file="output/predsForsite_2018.01.09.csv", sep=",", row.names=F, col.names=T)
+
+    #predboot_tota <- lapply(function(1:boots), function(i) {
+        pred <- predict.brt(tmp.brt=outboot_tota[[i]][["brt"]],
+                             pred.dat=pred.dat)
+        pred        
+      }) 
+    #names(predboot_tota) <- names(outboot_tota)
+    #rm(outboot_tota)
+    #cache(predboot_tota)
+  #boots <- length(predboot_MlAbspp_lvl1.1[[1]])
+```
+

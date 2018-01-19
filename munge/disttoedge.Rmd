@@ -1,0 +1,67 @@
+---
+title: "NearestStandEdge"
+author: "Nicole Barker"
+date: "December 21, 2017"
+output: html_document
+---
+
+
+
+
+
+
+
+
+
+
+Code from another script
+
+### Focus on Distance to Nearest polygon/stand edge
+
+Because we're working with two different VRI shapefiles, some of the point count SSs will have two distances to nearest polygons.. one from the CanforTFL and one from the Forsite "mig birds" VRI file. 
+
+![ ^^^ Image. Example for SS BL2TFL48:Block2:59 and distance to edge to both the CanforTFL layer and the Forsite mig birds layer. NEAR_FID refers to the OBJECT_ID in the polyline shapefile for the VRI shapefiles](../output/DistanceToEdgeExample.jpg)
+
+Here I need to identify those and save only the shortest distance. 
+
+
+``` {r}
+neededcols2 <- c('SS', 'FID_BIRD', 'FID_VRI', 'VRIintersectLayer', "PCODE", "NEAR_FID", "NEAR_DIST")
+  
+alldat.fordisttoedge <- rbind(atlas[neededcols2], bam[neededcols2], bbs[neededcols2], wsi[neededcols2], canfortfl[neededcols2], canfortflwsi[neededcols2])
+```
+
+`r sum(duplicated(alldat.fordisttoedge$SS))` duplicated SSs. 
+
+
+``` {r}
+dupSS <- alldat.fordisttoedge$SS[duplicated(alldat.fordisttoedge$SS)]
+
+alldat.fordisttoedge.nodups <-  alldat.fordisttoedge[!alldat.fordisttoedge$SS %in% dupSS,]
+alldat.fordisttoedge.dups <-  alldat.fordisttoedge[alldat.fordisttoedge$SS %in% dupSS,]
+
+alldat.fordisttoedge.dups <- alldat.fordisttoedge.dups[order(alldat.fordisttoedge.dups$SS, alldat.fordisttoedge.dups$NEAR_DIST, decreasing = T),]
+
+sampleSS <- sample(dupSS, 30)
+
+kable(alldat.fordisttoedge.dups[alldat.fordisttoedge.dups$SS %in% sampleSS,], row.names=F)
+```
+
+``` {r}
+unique(alldat.fordisttoedge.dups$PCODE) # which projects have two distance measurements? 
+```
+
+Only data that fall within the Canfor TFL have duplicate distance to edges. This is because Trish ran distnace to edge for these point counts twice... once as part of the full intersection with the Forsite VRI... and once with just the Canfor TFL. She didn't remove the one set, so they're duplicated. 
+
+This also explains the duplication detected above, and why almost all of the duplicates fell within the Canfor TFL. 
+
+
+Question to self: if I were to isolate the second version of each SS after sorting in decreasing order by distance to edge, would it consistently pull from the correct database (e.g., Canfor = smaller distance)
+
+``` {r}
+test <- alldat.fordisttoedge.dups[alldat.fordisttoedge.dups$SS %in% sampleSS,]
+
+test[duplicated(test$SS),] 
+```
+
+Looks like yes, but maybe I should just cut out the duplicates based on combination of PCODE and the VRI file. This would omit point counts from within the Canfor TFL that were intersected with the Forsite mig birds layer. 
