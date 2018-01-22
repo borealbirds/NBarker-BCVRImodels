@@ -50,9 +50,6 @@ Temporary Items
 .RData
 *.Rhistory
 .Rhistory
-.Rproj.user*
-*.Rproj
-.Rproj.user
 .Ruserdata
 .Rapp.history
 *.doc*
