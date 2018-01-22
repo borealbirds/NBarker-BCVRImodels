@@ -1,0 +1,310 @@
+---
+title: "Pre-process avian data at the SS level"
+author: "Nicole Barker"
+date: "Last run: Jan 22, 2017"
+output: 
+  word_document:
+    reference_docx: ../styles/ReportFormat_1.docx
+---
+## Script Abstract
+
+One of a series of scripts that quality-checks, corrects,  pre-processes, and merges the various tables from BAM's Avian Database. Removes duplicates. Performs some initial tests of patterns in avian data by survey method to help decide how to harmonize the data. 
+
+This script deals with SS (site)-level data, and adds in site-level covariates.
+
+## Background
+On Nov 30, 2017, Trish provided me with the Access Database of BAM's avian data: COFI_BC_NOV30_2017.accdb. I exported the 3 tables based on BAM's standard data format.
+
+**FILES**
+
+1. **BC_COFI_XY.csv**
+2. **BC_COFI_PKEY.txt**
+3. **BC_COFI_POINTCOUNT.txt**
+
+This script does the following
+
+* Look for and eliminate duplications
+* Correct any errors noticed during pre-processing
+* Save a pre-processed table of SS-level data for further processing/use
+
+
+``` {r setup, echo=F, message=F, warning=F}
+require(knitr)
+opts_knit$set(root.dir = '..')
+```
+
+``` {r load.project, message=F}
+require(ProjectTemplate)
+load.project()
+options(digits=12)
+```
+
+## 1. XY Coordinates of each survey site: *BC_COFI_XY.txt*
+
+### Initial Quality Check, Removal of Duplicates, Check for Missing DAta
+
+``` {r load.xy}
+xy<- read.csv("data/BC_COFI_XY.csv")
+kable(head(xy), row.names=F)
+```
+
+**Checking for Missing Data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind,lapply(xy, function(x) {sum(is.na(x))}))), caption="Number of missing values per column")
+kable(as.data.frame(do.call(rbind,lapply(xy, function(x) {length(unique(x))}))), caption="Number unique values per column")
+nrow(xy)
+length(unique(xy$SS))
+```
+
+**Notes**
+
+* `r unique(xy[is.na(xy$X),]$PCODE)` have SSs without X coordinates
+* ACTION: Long-term: Suggest Trish could look into datasets without coordinates. 
+* ACTION: Short-term: Keep them for now but they'll be dropped at covariate stage
+
+### Add Covariates at location (XY /SS) level
+
+#### Load SS Covariates
+
+* covariatesforoffsetMay2017Timezone.csv
+
+``` {r}
+ss.covar <- read.csv("data/covariatesforoffsetMay2017Timezone.csv", header=T)
+colnames(ss.covar)
+unique(ss.covar$PCODE)
+```
+
+**Checking for Missing Data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind,lapply(ss.covar, function(x) {sum(is.na(x))}))), caption="Number of missing values per column")
+
+ss.covar.uniquevalues <- as.data.frame(do.call(rbind,lapply(ss.covar, function(x) { length(unique(x))})))
+colnames(ss.covar.uniquevalues) <- c("Num.Unique.Values")
+kable(ss.covar.uniquevalues)
+```
+
+#### Merge SS covariates with xy table by SS
+
+``` {r}
+xy.ss.covar <- merge(xy, ss.covar, by="SS", all=T)
+```
+
+**Some Quality Checks*
+
+Are PCODES the same for all SS?
+
+``` {r}
+xy.ss.covar$PCODE.x <- as.character(xy.ss.covar$PCODE.x)
+xy.ss.covar$PCODE.y <- as.character(xy.ss.covar$PCODE.y)
+all.equal(xy.ss.covar$PCODE.x, xy.ss.covar$PCODE.y)
+```
+
+Answer: No. Some PCODES have NA in one or the other dataset (i.e., they're missing from the other dataset).
+
+``` {r}
+unique(xy.ss.covar[is.na(xy.ss.covar$PCODE.y),]$PCODE.x)
+unique(xy.ss.covar[is.na(xy.ss.covar$PCODE.x),]$PCODE.y)
+
+```
+
+**Remove QC Atlas and MB Atlas from covariates table, then redo merge and quality check**
+
+``` {r}
+ss.covar <- subset(ss.covar, ss.covar$PCODE %in% c("BCCA","EKTFL14", "LRM655", "KMART", "QDFA", "PGTSA", "TFL48VM", "BL2TFL48", "GMSMON15", "DCFBP"))
+xy.ss.covar <- merge(xy, ss.covar, by="SS", all=T)
+```
+
+**Some Quality Checks*
+
+Are PCODES the same for all SS?
+
+``` {r}
+xy.ss.covar$PCODE.x <- as.character(xy.ss.covar$PCODE.x)
+xy.ss.covar$PCODE.y <- as.character(xy.ss.covar$PCODE.y)
+all.equal(xy.ss.covar$PCODE.x, xy.ss.covar$PCODE.y)
+```
+
+Answer: No. Some PCODES have NA in one or the other dataset (i.e., they're missing from the other dataset).
+
+**NOTES**
+
+* It appears that some SS from the following projects are missing covariates: `r unique(xy.ss.covar[is.na(xy.ss.covar$PCODE.y),]$PCODE.x)`
+* Some SS from `r unique(xy.ss.covar[is.na(xy.ss.covar$PCODE.x),]$PCODE.y)` are in the covariates file but not the XY/SS file in the COFI Access database. 
+
+##### Fix: Create new PCODE
+
+* Derive PCODE from SS
+* compare to PCODE.x and PCODE.y
+
+``` {r}
+xy.ss.covar$PCODE_derived <- unlist(lapply(strsplit(as.character(xy.ss.covar$SS), ":", fixed=T), function(x) {x[1]}))
+xy.ss.covar$PCODE_extracted <- xy.ss.covar$PCODE.x
+xy.ss.covar$PCODE_extracted[is.na(xy.ss.covar$PCODE_extracted)] <- xy.ss.covar$PCODE.y[is.na(xy.ss.covar$PCODE_extracted)]
+
+all.equal(xy.ss.covar$PCODE_derived, xy.ss.covar$PCODE_extracted)
+
+length(unique(xy.ss.covar$PCODE_extracted))
+length(unique(xy.ss.covar$PCODE_derived))
+```
+
+**NOTES**
+
+* There's a bizarre number of PCODES derived from the SSs. Need to track those down. 
+
+``` {r}
+head(xy.ss.covar[xy.ss.covar$PCODE_derived %in% "08LM94",])
+```
+
+**NOTES**
+
+* I opened up the covariates file in Excel and saw that ALL points from the BC Atlas are missing "BCCA" from the SS. I added them back in manually. Now let's do this merge again
+
+
+#### Load SS Covariates
+
+* covariatesforoffsetMay2017Timezone_manuallyFixed.csv
+
+``` {r}
+ss.covar <- read.csv("data/covariatesforoffsetMay2017Timezone_manuallyFixed.csv", header=T)
+colnames(ss.covar)
+unique(ss.covar$PCODE)
+```
+
+**Checking for Missing Data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind,lapply(ss.covar, function(x) {sum(is.na(x))}))), caption="Number of missing values per column")
+
+ss.covar.uniquevalues <- as.data.frame(do.call(rbind,lapply(ss.covar, function(x) { length(unique(x))})))
+colnames(ss.covar.uniquevalues) <- c("Num.Unique.Values")
+kable(ss.covar.uniquevalues)
+```
+
+**Remove QC Atlas and MB Atlas from covariates table, then redo merge and quality check**
+
+``` {r}
+ss.covar <- subset(ss.covar, ss.covar$PCODE %in% c("BCCA","EKTFL14", "LRM655", "KMART", "QDFA", "PGTSA", "TFL48VM", "BL2TFL48", "GMSMON15", "DCFBP"))
+xy.ss.covar <- merge(xy, ss.covar, by="SS", all=T)
+```
+
+**Some Quality Checks*
+
+Are PCODES the same for all SS?
+
+``` {r}
+xy.ss.covar$PCODE.x <- as.character(xy.ss.covar$PCODE.x)
+xy.ss.covar$PCODE.y <- as.character(xy.ss.covar$PCODE.y)
+all.equal(xy.ss.covar$PCODE.x, xy.ss.covar$PCODE.y)
+```
+
+Answer: No. Some PCODES have NA in one or the other dataset (i.e., they're missing from the other dataset).
+
+**NOTES**
+
+* It appears that some SS from the following projects are missing covariates: `r unique(xy.ss.covar[is.na(xy.ss.covar$PCODE.y),]$PCODE.x)`
+* SS from `r unique(xy.ss.covar[is.na(xy.ss.covar$PCODE.x),]$PCODE.y)` are in the covariates file but not the XY/SS file in the COFI Access database. 
+
+##### Fix: Create new PCODE
+
+* Derive PCODE from SS
+* compare to PCODE.x and PCODE.y
+
+``` {r}
+xy.ss.covar$PCODE_derived <- unlist(lapply(strsplit(as.character(xy.ss.covar$SS), ":", fixed=T), function(x) {x[1]}))
+xy.ss.covar$PCODE_extracted <- xy.ss.covar$PCODE.x
+xy.ss.covar$PCODE_extracted[is.na(xy.ss.covar$PCODE_extracted)] <- xy.ss.covar$PCODE.y[is.na(xy.ss.covar$PCODE_extracted)]
+
+all.equal(xy.ss.covar$PCODE_derived, xy.ss.covar$PCODE_extracted)
+
+length(unique(xy.ss.covar$PCODE_extracted))
+length(unique(xy.ss.covar$PCODE_derived))
+```
+
+**NOTE**
+
+* Problem 1 solved. At least SS all have PCODES now. So derived PCODES will equal PCODES from either file
+* Next step: Understand Missing PCODES 
+
+##### Add a PCODE column and remove other derived ones
+
+``` {r}
+xy.ss.covar$PCODE <- xy.ss.covar$PCODE_derived
+xy.ss.covar <- xy.ss.covar[-which(colnames(xy.ss.covar) %in% c("PCODE.x", "PCODE.y", "PCODE_derived", "PCODE_extracted"))]
+colnames(xy.ss.covar)
+```
+
+
+**Checking for Missing Data**
+
+``` {r}
+kable(as.data.frame(do.call(rbind,lapply(xy.ss.covar, function(x) {sum(is.na(x))}))), caption="Number of missing values per column")
+kable(as.data.frame(do.call(rbind,lapply(xy.ss.covar, function(x) {length(unique(x))}))), caption="Number unique values per column")
+nrow(xy.ss.covar)
+length(unique(xy.ss.covar$SS))
+```
+
+##### Regnerate XY coordinates by extracting from both tables
+
+* if has coordinates in SS file, use it. 
+* if doesn't have coordinates in SS file, us X coordinates from coordinates file for that SS. 
+
+``` {r}
+xy.ss.covar$X_coor <- xy.ss.covar$X 
+xy.ss.covar$X_coor[!is.na(xy.ss.covar$POINT_X)] <- xy.ss.covar$POINT_X[!is.na(xy.ss.covar$POINT_X)] 
+
+xy.ss.covar$Y_coor <- xy.ss.covar$Y
+xy.ss.covar$Y_coor[!is.na(xy.ss.covar$POINT_Y)] <- xy.ss.covar$POINT_Y[!is.na(xy.ss.covar$POINT_Y)]
+```
+
+**How many are still missing xy-coordinates**
+``` {r}
+xy.ss.covar$Missing_Coordinates <- NA
+xy.ss.covar$Missing_Coordinates[!is.na(xy.ss.covar$X_coor)] <- "NOT missing Coordinates"
+unique(xy.ss.covar$Missing_Coordinates)
+sum(is.na(xy.ss.covar$Missing_Coordinates))
+kable(head(xy.ss.covar[is.na(xy.ss.covar$X),]), row.names=F)
+```
+
+**NOTES**
+
+* So basically any points missing xy coordinates from the original "SS" table are missing them throughout. These are probably the BBS points that Trish told me about. 
+* Although `unique(xy.ss.covar[is.na(xy.ss.covar$Missing_XY),]$PCODE.x)` suggests that we're missing points from `r unique(xy.ss.covar[is.na(xy.ss.covar$Missing_XY),]$PCODE.x)`
+
+``` {r}
+xy.ss.covar$Missing_Covar <- NA
+xy.ss.covar$Missing_Covar[!is.na(xy.ss.covar$tree)] <- "NOT missing Covariates"
+unique(xy.ss.covar$Missing_Covar)
+sum(is.na(xy.ss.covar$Missing_Covar))
+```
+
+**Notes**
+
+* `r length(unique(xy.ss.covar[is.na(xy.ss.covar$Missing_Covar),]$SS))` SS are missing covariates, from the following PCODES `r unique(xy.ss.covar[is.na(xy.ss.covar$Missing_Covar),]$PCODE)` 
+
+``` {r}
+table(xy.ss.covar[is.na(xy.ss.covar$Missing_Covar),]$PCODE)
+```
+
+* ACTION: Long-term: Suggest Trish could look into datasets without covariates. 
+* ACTION: Short-term: Keep them for now but they'll be dropped at offset stage
+
+#### Subset for desired columns
+
+``` {r}
+colstokeep <- c("SS", "tree", "NALCMS05", "TZID", "FID_tz_wor", "X_coor", "Y_coor", "Missing_Coordinates", "Missing_Covar")
+xy.ss.covar <- xy.ss.covar[which(colnames(xy.ss.covar) %in% colstokeep)]
+```
+
+``` {r}
+kable(rbind(head(xy.ss.covar),
+            tail(xy.ss.covar)))
+```
+
+#### Cache
+
+``` {r}
+cache("xy.ss.covar")
+```
+
